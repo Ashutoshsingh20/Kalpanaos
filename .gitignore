@@ -1,0 +1,29 @@
+# Binaries
+*/col
+*/aaf-server
+*/ikg
+*/ssi
+*/pge
+*/fdcl
+*/sil
+
+# Data / Databases
+*.db
+*.db-journal
+/data/
+
+# Environment files
+.env
+.env.local
+
+# Certificates
+/certs/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Go
+vendor/

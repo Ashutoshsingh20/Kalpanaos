@@ -1,0 +1,11 @@
+go 1.22
+
+use (
+	./services/sil
+	./services/col
+	./services/ssi
+	./services/aicp
+	./services/aaf
+	./services/orchestrator
+	./cli
+)

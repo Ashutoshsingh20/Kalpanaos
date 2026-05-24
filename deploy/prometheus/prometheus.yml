@@ -1,0 +1,38 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'kalpana-sil'
+    static_configs:
+      - targets: ['sil:8001']
+    metrics_path: '/metrics'
+
+  - job_name: 'kalpana-col'
+    static_configs:
+      - targets: ['col:8002']
+    metrics_path: '/metrics'
+
+  - job_name: 'kalpana-ssi'
+    static_configs:
+      - targets: ['ssi:8003']
+    metrics_path: '/metrics'
+
+  - job_name: 'kalpana-aicp'
+    static_configs:
+      - targets: ['aicp:8004']
+    metrics_path: '/metrics'
+
+  - job_name: 'kalpana-aaf'
+    static_configs:
+      - targets: ['aaf:8005']
+    metrics_path: '/metrics'
+
+  - job_name: 'nats'
+    static_configs:
+      - targets: ['nats:8222']
+    metrics_path: '/metrics'

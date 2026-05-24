@@ -1,0 +1,507 @@
+version: "3.9"
+
+# ============================================================
+# KalpanaOS — Phase 3 Docker Compose Stack
+# Optimised for 4 GB RAM home server
+# Phase 3 adds: Orchestrator (8006), mTLS certs, JetStream,
+#               3 new agents, pipeline/fanout endpoints
+# ============================================================
+
+networks:
+  kalpana-net:
+    driver: bridge
+
+volumes:
+  sil-data:
+  col-data:
+  aaf-data:
+  qdrant-data:
+  nats-data:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  vault-data:
+  tempo-data:
+  orchestrator-data:
+  pge-data:
+  ikg-data:
+  fdcl-data:
+
+services:
+
+  # ── Infrastructure ──────────────────────────────────────────
+
+  qdrant:
+    image: qdrant/qdrant:v1.9.4
+    container_name: kalpana-qdrant
+    networks: [kalpana-net]
+    volumes:
+      - qdrant-data:/qdrant/storage
+    environment:
+      QDRANT__STORAGE__STORAGE_PATH: /qdrant/storage
+    ports:
+      - "6333:6333"
+    mem_limit: 400m
+    restart: unless-stopped
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: kalpana-nats
+    networks: [kalpana-net]
+    command: ["-js", "-m", "8222", "--store_dir", "/data"]
+    volumes:
+      - nats-data:/data
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    mem_limit: 80m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8222/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── KalpanaOS Services ──────────────────────────────────────
+
+  sil:
+    build:
+      context: ./services/sil
+      dockerfile: Dockerfile
+    container_name: kalpana-sil
+    networks: [kalpana-net]
+    volumes:
+      - sil-data:/data
+      - ./deploy/certs:/certs:ro
+    environment:
+      PORT: "8001"
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TTL_MINUTES: ${JWT_ACCESS_TTL_MINUTES:-15}
+      JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS:-7}
+      DB_PATH: /data/sil.db
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@kalpana.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Kalpana@2026!}
+      CERT_FILE: /certs/sil/server.crt
+      KEY_FILE: /certs/sil/server.key
+      CA_FILE: /certs/ca.crt
+    ports:
+      - "8001:8001"
+    mem_limit: 80m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  col:
+    build:
+      context: ./services/col
+      dockerfile: Dockerfile
+    container_name: kalpana-col
+    user: "root"
+    networks: [kalpana-net]
+    volumes:
+      - col-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./deploy/certs:/certs:ro
+    environment:
+      PORT: "8002"
+      DB_PATH: /data/col.db
+      SIL_URL: http://sil:8001
+      PGE_URL: http://pge:8007
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      CERT_FILE: /certs/col/server.crt
+      KEY_FILE: /certs/col/server.key
+      CA_FILE: /certs/ca.crt
+    ports:
+      - "8002:8002"
+    mem_limit: 100m
+    restart: unless-stopped
+    depends_on:
+      sil:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      pge:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8002/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  ssi:
+    build:
+      context: ./services/ssi
+      dockerfile: Dockerfile
+    container_name: kalpana-ssi
+    networks: [kalpana-net]
+    volumes:
+      - ./deploy/certs:/certs:ro
+    environment:
+      PORT: "8003"
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-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}
+      NVIDIA_API_BASE_URL: ${NVIDIA_API_BASE_URL:-https://integrate.api.nvidia.com/v1}
+      NVIDIA_EMBED_MODEL: ${NVIDIA_EMBED_MODEL:-nvidia/nv-embedqa-e5-v5}
+      SIL_URL: http://sil:8001
+      CERT_FILE: /certs/ssi/server.crt
+      KEY_FILE: /certs/ssi/server.key
+      CA_FILE: /certs/ca.crt
+    ports:
+      - "8003:8003"
+    mem_limit: 120m
+    restart: unless-stopped
+    depends_on:
+      sil:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8003/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  aicp:
+    build:
+      context: ./services/aicp
+      dockerfile: Dockerfile
+    container_name: kalpana-aicp
+    networks: [kalpana-net]
+    volumes:
+      - ./deploy/certs:/certs:ro
+    environment:
+      PORT: "8004"
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-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}
+      NVIDIA_API_BASE_URL: ${NVIDIA_API_BASE_URL:-https://integrate.api.nvidia.com/v1}
+      NVIDIA_CHAT_MODEL: ${NVIDIA_CHAT_MODEL:-meta/llama-3.1-8b-instruct}
+      SSI_URL: http://ssi:8003
+      COL_URL: http://col:8002
+      AAF_URL: http://aaf:8005
+      SIL_URL: http://sil:8001
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      ORCHESTRATOR_URL: http://orchestrator:8006
+      PROMETHEUS_URL: http://prometheus:9090
+      LOKI_URL: http://loki:3100
+      IKG_URL: http://ikg:8008
+      CERT_FILE: /certs/aicp/server.crt
+      KEY_FILE: /certs/aicp/server.key
+      CA_FILE: /certs/ca.crt
+    ports:
+      - "8004:8004"
+    mem_limit: 120m
+    restart: unless-stopped
+    depends_on:
+      sil:
+        condition: service_healthy
+      ssi:
+        condition: service_healthy
+      col:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8004/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  aaf:
+    build:
+      context: ./services/aaf
+      dockerfile: Dockerfile
+    container_name: kalpana-aaf
+    networks: [kalpana-net]
+    volumes:
+      - aaf-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./deploy/certs:/certs:ro
+    environment:
+      PORT: "8005"
+      DB_PATH: /data/aaf.db
+      SIL_URL: http://sil:8001
+      SSI_URL: http://ssi:8003
+      COL_URL: http://col:8002
+      AICP_URL: http://aicp:8004
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      ORCHESTRATOR_URL: http://orchestrator:8006
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-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}
+      NVIDIA_API_BASE_URL: ${NVIDIA_API_BASE_URL:-https://integrate.api.nvidia.com/v1}
+      NVIDIA_CHAT_MODEL: ${NVIDIA_CHAT_MODEL:-meta/llama-3.1-8b-instruct}
+      PROMETHEUS_URL: http://prometheus:9090
+      IKG_URL: http://ikg:8008
+      FDCL_URL: http://fdcl:8009
+      CERT_FILE: /certs/aaf/server.crt
+      KEY_FILE: /certs/aaf/server.key
+      CA_FILE: /certs/ca.crt
+    ports:
+      - "8005:8005"
+    mem_limit: 120m
+    restart: unless-stopped
+    depends_on:
+      sil:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8005/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Phase 3: Agent Orchestrator ─────────────────────────────
+
+  orchestrator:
+    build:
+      context: ./services/orchestrator
+      dockerfile: Dockerfile
+    container_name: kalpana-orchestrator
+    networks: [kalpana-net]
+    volumes:
+      - orchestrator-data:/data
+      - ./deploy/certs:/certs:ro
+    environment:
+      PORT: "8006"
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      SIL_URL: http://sil:8001
+      AAF_URL: http://aaf:8005
+      AICP_URL: http://aicp:8004
+      SSI_URL: http://ssi:8003
+      CERT_FILE: /certs/orchestrator/server.crt
+      KEY_FILE: /certs/orchestrator/server.key
+      CA_FILE: /certs/ca.crt
+    ports:
+      - "8006:8006"
+    mem_limit: 60m
+    restart: unless-stopped
+    depends_on:
+      sil:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      aaf:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8006/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Web UI ──────────────────────────────────────────────────
+
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    container_name: kalpana-ui
+    networks: [kalpana-net]
+    environment:
+      SIL_URL: http://sil:8001
+      AICP_URL: http://aicp:8004
+      COL_URL: http://col:8002
+      SSI_URL: http://ssi:8003
+      AAF_URL: http://aaf:8005
+      ORCHESTRATOR_URL: http://orchestrator:8006
+    ports:
+      - "3000:80"
+    mem_limit: 50m
+    restart: unless-stopped
+    depends_on:
+      - sil
+      - aicp
+      - orchestrator
+
+  # ── Observability ───────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: kalpana-prometheus
+    networks: [kalpana-net]
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    mem_limit: 200m
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: kalpana-grafana
+    networks: [kalpana-net]
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./deploy/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./deploy/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-kalpana-grafana}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: http://localhost:3001
+    ports:
+      - "3001:3000"
+    mem_limit: 150m
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+      - loki
+
+  loki:
+    image: grafana/loki:2.9.8
+    container_name: kalpana-loki
+    networks: [kalpana-net]
+    volumes:
+      - ./deploy/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    mem_limit: 150m
+    restart: unless-stopped
+
+  # ── Phase 5.2: Policy & Governance Engine ────────────────────
+
+  pge:
+    build:
+      context: ./services/pge
+      dockerfile: Dockerfile
+    container_name: kalpana-pge
+    networks: [kalpana-net]
+    volumes:
+      - pge-data:/data
+    environment:
+      PORT: "8007"
+      DB_PATH: /data/pge.db
+      SIL_URL: http://sil:8001
+      PGE_BYPASS_TOKEN: godmode-override
+    ports:
+      - "8007:8007"
+    mem_limit: 50m
+    restart: unless-stopped
+    depends_on:
+      sil:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Phase 5.3: Infrastructure Knowledge Graph ──────────────────
+
+  ikg:
+    build:
+      context: ./services/ikg
+      dockerfile: Dockerfile
+    container_name: kalpana-ikg
+    networks: [kalpana-net]
+    volumes:
+      - ikg-data:/data
+    environment:
+      PORT: "8008"
+      DB_PATH: /data/ikg.db
+      SIL_URL: http://sil:8001
+      NATS_URL: nats://nats:4222
+    ports:
+      - "8008:8008"
+    mem_limit: 50m
+    restart: unless-stopped
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Phase 5.4: Federated Distributed Cognition Layer ─────────────
+
+  fdcl:
+    build:
+      context: ./services/fdcl
+      dockerfile: Dockerfile
+    container_name: kalpana-fdcl
+    networks: [kalpana-net]
+    environment:
+      PORT: "8009"
+      NATS_URL: nats://nats:4222
+    ports:
+      - "8009:8009"
+    mem_limit: 50m
+    restart: unless-stopped
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8009/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  promtail:
+    image: grafana/promtail:2.9.8
+    container_name: kalpana-promtail
+    networks: [kalpana-net]
+    volumes:
+      - ./deploy/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    mem_limit: 80m
+    restart: unless-stopped
+    depends_on:
+      - loki
+
+  # ── Phase 2: Secrets Management ──────────────────────────────
+
+  vault:
+    image: hashicorp/vault:1.16
+    container_name: kalpana-vault
+    networks: [kalpana-net]
+    volumes:
+      - vault-data:/vault/data
+      - ./deploy/vault/vault-config.hcl:/vault/config/vault-config.hcl:ro
+    environment:
+      VAULT_ADDR: http://0.0.0.0:8200
+      VAULT_API_ADDR: http://0.0.0.0:8200
+    cap_add:
+      - IPC_LOCK
+    command: server
+    ports:
+      - "8200:8200"
+    mem_limit: 80m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8200/v1/sys/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ── Phase 2: Distributed Tracing ─────────────────────────────
+
+  tempo:
+    image: grafana/tempo:2.4.1
+    container_name: kalpana-tempo
+    networks: [kalpana-net]
+    volumes:
+      - ./deploy/tempo/tempo-config.yml:/etc/tempo/config.yml:ro
+      - tempo-data:/tmp/tempo
+    command: ["-config.file=/etc/tempo/config.yml"]
+    ports:
+      - "3200:3200"   # Tempo query API
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    mem_limit: 150m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3200/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s

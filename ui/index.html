@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KalpanaOS — Sovereign AI Cloud</title>
+  <meta name="description" content="KalpanaOS operational dashboard — manage your sovereign AI cloud infrastructure through natural language." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Login Screen -->
+  <div id="login-screen" class="login-screen">
+    <div class="login-bg">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+    </div>
+    <div class="login-card glass">
+      <div class="login-logo">
+        <div class="logo-icon">⚛</div>
+        <span class="logo-text">KalpanaOS</span>
+        <span class="logo-sub">Sovereign AI Cloud</span>
+      </div>
+      <form id="login-form" class="login-form">
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" placeholder="admin@kalpana.local" autocomplete="email" />
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="••••••••••" autocomplete="current-password" />
+        </div>
+        <div id="login-error" class="login-error hidden"></div>
+        <button type="submit" id="login-btn" class="btn btn-primary btn-full">
+          <span class="btn-text">Authenticate</span>
+          <span class="btn-spinner hidden">⟳</span>
+        </button>
+      </form>
+      <p class="login-hint">v2.0 Phase 2 · Home Server Edition</p>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="app" class="app hidden">
+    <!-- Sidebar -->
+    <aside class="sidebar glass">
+      <div class="sidebar-logo">
+        <div class="logo-icon">⚛</div>
+        <span>KalpanaOS</span>
+      </div>
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-page="dashboard" id="nav-dashboard">
+          <span class="nav-icon">◈</span>
+          <span>Dashboard</span>
+        </button>
+        <button class="nav-item" data-page="chat" id="nav-chat">
+          <span class="nav-icon">◉</span>
+          <span>AI Control Plane</span>
+        </button>
+        <button class="nav-item" data-page="services" id="nav-services">
+          <span class="nav-icon">◫</span>
+          <span>Services</span>
+        </button>
+        <button class="nav-item" data-page="agents" id="nav-agents">
+          <span class="nav-icon">◎</span>
+          <span>Agents</span>
+        </button>
+        <button class="nav-item" data-page="search" id="nav-search">
+          <span class="nav-icon">◍</span>
+          <span>Knowledge Search</span>
+        </button>
+        <button class="nav-item" data-page="observe" id="nav-observe">
+          <span class="nav-icon">◌</span>
+          <span>Observability</span>
+        </button>
+        <!-- Phase 2 nav -->
+        <button class="nav-item" data-page="anomalies" id="nav-anomalies">
+          <span class="nav-icon">⚠</span>
+          <span>Anomaly Detection</span>
+        </button>
+        <button class="nav-item" data-page="memory" id="nav-memory">
+          <span class="nav-icon">◈</span>
+          <span>Episodic Memory</span>
+        </button>
+        <!-- Phase 3 Nav -->
+        <div class="nav-section-label">Phase 3 · Orchestration</div>
+        <button class="nav-item" data-page="topology" id="nav-topology">
+          <span class="nav-icon">🕸</span>
+          <span>Agent Topology</span>
+        </button>
+        <button class="nav-item" data-page="orchestrations" id="nav-orchestrations">
+          <span class="nav-icon">⚡</span>
+          <span>Orchestrations</span>
+        </button>
+        <button class="nav-item" data-page="events" id="nav-events">
+          <span class="nav-icon">📡</span>
+          <span>Live Events</span>
+        </button>
+        <!-- Phase 4 Nav -->
+        <div class="nav-section-label">Phase 4 · Federation</div>
+        <button class="nav-item" data-page="federation" id="nav-federation">
+          <span class="nav-icon">🌐</span>
+          <span>Federation & Edge</span>
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="user-badge glass">
+          <div class="user-avatar">A</div>
+          <div class="user-info">
+            <span class="user-name" id="sidebar-username">Operator</span>
+            <span class="user-role">Admin</span>
+          </div>
+        </div>
+        <button class="btn-logout" id="logout-btn" title="Logout">⏻</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Dashboard Page -->
+      <div id="page-dashboard" class="page active">
+        <div class="page-header">
+          <h1>Infrastructure Overview</h1>
+          <div class="header-actions">
+            <span class="status-dot online" id="system-status-dot"></span>
+            <span id="system-status-text">All Systems Operational</span>
+            <button class="btn btn-ghost" id="refresh-dashboard">↻ Refresh</button>
+          </div>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="stats-grid">
+          <div class="stat-card glass">
+            <div class="stat-icon" style="background: linear-gradient(135deg,#6366f1,#8b5cf6)">◫</div>
+            <div class="stat-body">
+              <span class="stat-value" id="stat-services">—</span>
+              <span class="stat-label">Running Services</span>
+            </div>
+            <div class="stat-trend up">↑</div>
+          </div>
+          <div class="stat-card glass">
+            <div class="stat-icon" style="background: linear-gradient(135deg,#06b6d4,#3b82f6)">◎</div>
+            <div class="stat-body">
+              <span class="stat-value" id="stat-agents">—</span>
+              <span class="stat-label">Active Agents</span>
+            </div>
+            <div class="stat-trend up">↑</div>
+          </div>
+          <div class="stat-card glass">
+            <div class="stat-icon" style="background: linear-gradient(135deg,#10b981,#059669)">◍</div>
+            <div class="stat-body">
+              <span class="stat-value" id="stat-vectors">—</span>
+              <span class="stat-label">Indexed Documents</span>
+            </div>
+            <div class="stat-trend neutral">→</div>
+          </div>
+          <div class="stat-card glass">
+            <div class="stat-icon" style="background: linear-gradient(135deg,#f59e0b,#ef4444)">◉</div>
+            <div class="stat-body">
+              <span class="stat-value" id="stat-pending">—</span>
+              <span class="stat-label">Pending Approvals</span>
+            </div>
+            <div class="stat-trend neutral" id="pending-trend">→</div>
+          </div>
+        </div>
+
+        <!-- Node Info + Services -->
+        <div class="dashboard-grid">
+          <div class="card glass">
+            <div class="card-header">
+              <h3>Node Information</h3>
+              <span class="badge badge-green">Online</span>
+            </div>
+            <div class="node-info" id="node-info">
+              <div class="info-row"><span>Hostname</span><span id="node-hostname">—</span></div>
+              <div class="info-row"><span>CPU Cores</span><span id="node-cpu">—</span></div>
+              <div class="info-row"><span>Total Memory</span><span id="node-mem">—</span></div>
+              <div class="info-row"><span>Docker Version</span><span id="node-docker">—</span></div>
+              <div class="info-row"><span>Uptime</span><span id="node-uptime">—</span></div>
+            </div>
+          </div>
+
+          <div class="card glass">
+            <div class="card-header">
+              <h3>Service Health</h3>
+              <button class="btn btn-ghost btn-sm" id="deploy-service-btn">+ Deploy</button>
+            </div>
+            <div class="service-list" id="service-health-list">
+              <div class="loading-pulse"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Audit Log -->
+        <div class="card glass">
+          <div class="card-header">
+            <h3>Recent Audit Log</h3>
+            <span class="badge badge-blue">Live</span>
+          </div>
+          <div class="audit-table-wrap">
+            <table class="audit-table">
+              <thead>
+                <tr><th>Time</th><th>Operator</th><th>Action</th><th>Resource</th><th>Detail</th></tr>
+              </thead>
+              <tbody id="audit-log-body">
+                <tr><td colspan="5" class="empty-row">Loading audit log…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Chat Page -->
+      <div id="page-chat" class="page">
+        <div class="page-header">
+          <h1>AI Control Plane</h1>
+          <div class="header-actions">
+            <span class="model-badge glass" id="chat-model-badge">⚡ meta/llama-3.1-8b-instruct</span>
+            <button class="btn btn-ghost" id="new-session-btn">+ New Session</button>
+          </div>
+        </div>
+
+        <div class="chat-layout">
+          <div class="chat-container glass">
+            <div class="chat-messages" id="chat-messages">
+              <div class="chat-welcome">
+                <div class="welcome-icon">⚛</div>
+                <h3>KalpanaAI is ready</h3>
+                <p>Ask me anything about your infrastructure. I can deploy services, check status, search your knowledge base, and run agents — all through natural language.</p>
+                <div class="quick-prompts">
+                  <button class="quick-prompt" data-prompt="What services are currently running?">What services are running?</button>
+                  <button class="quick-prompt" data-prompt="Give me an infrastructure status report">Infrastructure report</button>
+                  <button class="quick-prompt" data-prompt="Search my knowledge base for deployment guides">Search knowledge base</button>
+                  <button class="quick-prompt" data-prompt="Run the InfraReportAgent">Run InfraReportAgent</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="chat-input-area">
+              <div id="pending-confirmation" class="pending-banner hidden">
+                <span class="pending-icon">⚠</span>
+                <span id="pending-desc">Pending command requires confirmation</span>
+                <div class="pending-actions">
+                  <button class="btn btn-danger btn-sm" id="confirm-cmd-btn">✓ Confirm</button>
+                  <button class="btn btn-ghost btn-sm" id="reject-cmd-btn">✕ Reject</button>
+                </div>
+              </div>
+              <div class="chat-input-row">
+                <textarea
+                  id="chat-input"
+                  class="chat-textarea"
+                  placeholder="Ask KalpanaAI anything…"
+                  rows="1"
+                ></textarea>
+                <button class="btn btn-primary chat-send-btn" id="chat-send">
+                  <span>Send</span>
+                </button>
+              </div>
+              <div class="chat-footer-hint">KalpanaAI will ask for confirmation before any destructive action</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Services Page -->
+      <div id="page-services" class="page">
+        <div class="page-header">
+          <h1>Services</h1>
+          <div class="header-actions">
+            <button class="btn btn-primary" id="open-deploy-modal">+ Deploy Service</button>
+          </div>
+        </div>
+        <div class="services-grid" id="services-grid">
+          <div class="loading-pulse"></div>
+        </div>
+      </div>
+
+      <!-- Agents Page -->
+      <div id="page-agents" class="page">
+        <div class="page-header">
+          <h1>Autonomous Agents</h1>
+          <button class="btn btn-primary" id="run-agent-btn">▶ Run Agent</button>
+        </div>
+        <div class="agents-layout">
+          <div class="card glass">
+            <div class="card-header"><h3>Registered Agents</h3></div>
+            <div id="agents-list" class="agents-list">
+              <div class="loading-pulse"></div>
+            </div>
+          </div>
+          <div class="card glass">
+            <div class="card-header">
+              <h3>Task Queue</h3>
+              <button class="btn btn-ghost btn-sm" id="refresh-tasks">↻</button>
+            </div>
+            <div id="tasks-list" class="tasks-list">
+              <div class="loading-pulse"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Knowledge Search Page -->
+      <div id="page-search" class="page">
+        <div class="page-header">
+          <h1>Knowledge Search</h1>
+        </div>
+        <div class="search-layout">
+          <div class="search-bar-wrap glass">
+            <span class="search-icon">⌕</span>
+            <input type="text" id="search-input" class="search-input" placeholder="Search your knowledge base semantically…" />
+            <button class="btn btn-primary" id="search-btn">Search</button>
+          </div>
+          <div class="ingest-section">
+            <div class="card glass">
+              <div class="card-header">
+                <h3>Ingest Document</h3>
+              </div>
+              <div class="ingest-form">
+                <textarea id="ingest-text" class="ingest-textarea" placeholder="Paste text to add to your knowledge base…" rows="4"></textarea>
+                <input type="text" id="ingest-source" class="input-field" placeholder="Source label (e.g. deployment-guide)" />
+                <button class="btn btn-primary" id="ingest-btn">+ Ingest to Knowledge Base</button>
+              </div>
+            </div>
+          </div>
+          <div id="search-results" class="search-results">
+            <div class="search-empty">
+              <span class="search-empty-icon">◍</span>
+              <p>Search results will appear here</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Observability Page -->
+      <div id="page-observe" class="page">
+        <div class="page-header">
+          <h1>Observability</h1>
+          <div class="header-actions">
+            <a href="http://localhost:3001" target="_blank" class="btn btn-ghost">Open Grafana ↗</a>
+            <a href="http://localhost:9090" target="_blank" class="btn btn-ghost">Open Prometheus ↗</a>
+          </div>
+        </div>
+        <div class="observe-grid">
+          <div class="card glass observe-card">
+            <div class="card-header"><h3>Service Health Status</h3></div>
+            <div id="observe-health" class="observe-health">
+              <div class="loading-pulse"></div>
+            </div>
+          </div>
+          <div class="card glass observe-card">
+            <div class="card-header"><h3>Grafana Dashboard</h3></div>
+            <div class="grafana-embed-wrap">
+              <iframe
+                src=""
+                class="grafana-iframe"
+                id="grafana-iframe"
+                title="KalpanaOS Grafana Dashboard"
+              ></iframe>
+              <div class="grafana-fallback" id="grafana-fallback">
+                <p>Grafana not reachable yet. <a href="" id="grafana-fallback-link" target="_blank">Open directly →</a></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase 2: Anomaly Detection Page -->
+      <div id="page-anomalies" class="page">
+        <div class="page-header">
+          <h1>Anomaly Detection</h1>
+          <div class="header-actions">
+            <span id="anomaly-scan-time" class="badge badge-blue" style="display:none"></span>
+            <button class="btn btn-primary" id="scan-anomalies-btn">⚡ Run Diagnostic Scan</button>
+          </div>
+        </div>
+
+        <div class="card glass" style="margin-bottom:1.5rem">
+          <div class="card-header">
+            <h3>AI Infrastructure Analysis</h3>
+            <span class="badge badge-green">Powered by LLaMA 3.1</span>
+          </div>
+          <p style="color:var(--text-muted);padding:1rem 0 0">KalpanaAI continuously monitors your Prometheus metrics and Loki error logs. Click <strong>Run Diagnostic Scan</strong> to trigger an immediate AI analysis of the last 30 minutes of telemetry.</p>
+          <div id="anomaly-scan-output" class="anomaly-report-box hidden"></div>
+        </div>
+
+        <div class="card-header" style="padding:0 0 1rem">
+          <h3>Active Anomalies</h3>
+          <button class="btn btn-ghost btn-sm" id="refresh-anomalies-btn">↻ Refresh</button>
+        </div>
+        <div id="anomalies-list" class="anomalies-list">
+          <div class="loading-pulse"></div>
+        </div>
+      </div>
+
+      <!-- Phase 2: Episodic Memory Page -->
+      <div id="page-memory" class="page">
+        <div class="page-header">
+          <h1>Episodic Memory</h1>
+          <div class="header-actions">
+            <span class="badge badge-blue">Long-Term AI Memory</span>
+            <button class="btn btn-ghost" id="refresh-memory-btn">↻ Refresh</button>
+          </div>
+        </div>
+
+        <div class="card glass" style="margin-bottom:1.5rem">
+          <p style="color:var(--text-muted)">KalpanaAI automatically remembers past interactions, agent outputs, and infrastructure events. This memory is used to enrich future AI responses with relevant context from your history.</p>
+        </div>
+
+        <div class="memory-filters" style="display:flex;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm memory-filter active" data-type="">All Types</button>
+          <button class="btn btn-ghost btn-sm memory-filter" data-type="chat_interaction">💬 Chat</button>
+          <button class="btn btn-ghost btn-sm memory-filter" data-type="agent_output">🤖 Agent</button>
+          <button class="btn btn-ghost btn-sm memory-filter" data-type="anomaly">⚠ Anomaly</button>
+          <button class="btn btn-ghost btn-sm memory-filter" data-type="infra_event">🔧 Infra</button>
+        </div>
+
+        <div id="memory-list" class="memory-list">
+          <div class="loading-pulse"></div>
+        </div>
+      </div>
+
+      <!-- Phase 3: Agent Topology Page -->
+      <div id="page-topology" class="page">
+        <div class="page-header">
+          <h1>Agent Topology</h1>
+          <div class="header-actions">
+            <span class="badge badge-purple">Phase 3 · Multi-Agent Mesh</span>
+            <button class="btn btn-ghost" id="refresh-topology-btn">↻ Refresh</button>
+          </div>
+        </div>
+        <div class="p3-grid">
+          <div class="card glass" style="grid-column:span 2">
+            <h3 style="margin-bottom:1rem">Registered Agents</h3>
+            <div id="agents-grid" class="agents-grid"></div>
+          </div>
+          <div class="card glass">
+            <h3 style="margin-bottom:1rem">Quick Orchestrate</h3>
+            <div class="form-group">
+              <label>Goal</label>
+              <textarea id="orch-goal" class="ingest-textarea" rows="3" placeholder="e.g. 'comprehensive analysis' or 'predict scaling needs'"></textarea>
+            </div>
+            <button class="btn btn-primary" id="run-orchestration-btn" style="width:100%;margin-top:.5rem">⚡ Orchestrate</button>
+            <div id="orch-status" style="margin-top:1rem;display:none">
+              <div class="loading-pulse"></div>
+              <p style="text-align:center;margin-top:.5rem;color:var(--text-muted)">Running multi-agent plan...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase 3: Orchestrations Page -->
+      <div id="page-orchestrations" class="page">
+        <div class="page-header">
+          <h1>Orchestration Plans</h1>
+          <div class="header-actions">
+            <span class="badge badge-blue">DAG Execution Engine</span>
+            <button class="btn btn-ghost" id="refresh-plans-btn">↻ Refresh</button>
+          </div>
+        </div>
+        <div id="plans-list" class="plans-list"></div>
+      </div>
+
+      <!-- Phase 3: Live Events Page -->
+      <div id="page-events" class="page">
+        <div class="page-header">
+          <h1>Live Event Stream</h1>
+          <div class="header-actions">
+            <span id="sse-status-badge" class="badge badge-green">🟢 Connected</span>
+            <button class="btn btn-ghost" id="clear-events-btn">Clear</button>
+          </div>
+        </div>
+        <div class="card glass" style="margin-bottom:1.5rem;padding:.75rem 1.25rem">
+          <p style="color:var(--text-muted);font-size:.85rem">Real-time event stream from the Orchestrator. All agent heartbeats, task dispatches, and plan completions appear here instantly via Server-Sent Events.</p>
+        </div>
+        <div id="events-feed" class="events-feed"></div>
+      </div>
+
+      <!-- Phase 4: Federation Page -->
+      <div id="page-federation" class="page">
+        <div class="page-header">
+          <h1>Federation & Self-Healing</h1>
+          <div class="header-actions">
+            <button class="btn btn-primary" id="add-peer-btn">+ Trust New Peer</button>
+          </div>
+        </div>
+
+        <div class="federation-grid">
+          <!-- Peers list -->
+          <div class="card glass">
+            <h2>Trusted Peer Nodes</h2>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Friendly Name</th>
+                    <th>URL</th>
+                    <th>DID</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="peers-list-tbody">
+                  <!-- Dynamic peers list -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Self Healing Audit Log -->
+          <div class="card glass">
+            <h2>Self-Healing Remediation Log</h2>
+            <div class="timeline" id="remediation-audit-log">
+              <!-- Remediation log items -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Capability Registry / Marketplace -->
+        <div class="card glass" style="margin-top:1.5rem">
+          <h2>Federated Agent Marketplace</h2>
+          <p style="color:var(--text-muted);font-size:.85rem;margin-bottom:1rem">Discover agent capabilities advertised by connected peers and request workload delegation.</p>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Agent ID</th>
+                  <th>Name</th>
+                  <th>Description</th>
+                  <th>Capabilities</th>
+                  <th>Delegation Route</th>
+                </tr>
+              </thead>
+              <tbody id="federated-marketplace-tbody">
+                <!-- Federated marketplace items -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Deploy Service Modal -->
+  <div id="deploy-modal" class="modal-overlay hidden">
+    <div class="modal glass">
+      <div class="modal-header">
+        <h3>Deploy Service</h3>
+        <button class="modal-close" id="close-deploy-modal">✕</button>
+      </div>
+      <form id="deploy-form" class="modal-form">
+        <div class="form-group">
+          <label>Service Name</label>
+          <input type="text" id="deploy-name" class="input-field" placeholder="my-service" required />
+        </div>
+        <div class="form-group">
+          <label>Docker Image</label>
+          <input type="text" id="deploy-image" class="input-field" placeholder="nginx:alpine" required />
+        </div>
+        <div class="form-group">
+          <label>Port Mapping (host:container)</label>
+          <input type="text" id="deploy-ports" class="input-field" placeholder="8080:80" />
+        </div>
+        <div class="form-group">
+          <label>Environment Variables (KEY=VALUE, one per line)</label>
+          <textarea id="deploy-env" class="ingest-textarea" rows="3" placeholder="API_KEY=abc&#10;DEBUG=true"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Memory Limit</label>
+          <input type="text" id="deploy-mem" class="input-field" placeholder="128m" value="128m" />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="cancel-deploy">Cancel</button>
+          <button type="submit" class="btn btn-primary">Deploy</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Trust Peer Modal -->
+  <div id="peer-modal" class="modal-overlay hidden">
+    <div class="modal glass">
+      <div class="modal-header">
+        <h3>Trust New Peer Node</h3>
+        <button class="modal-close" id="close-peer-modal">✕</button>
+      </div>
+      <form id="peer-form" class="modal-form">
+        <div class="form-group">
+          <label>Friendly Name</label>
+          <input type="text" id="peer-name" class="input-field" placeholder="My Edge Node" required />
+        </div>
+        <div class="form-group">
+          <label>Peer DID (did:key:...)</label>
+          <input type="text" id="peer-did" class="input-field" placeholder="did:key:z6M..." required />
+        </div>
+        <div class="form-group">
+          <label>Endpoint URL (Orchestrator Host)</label>
+          <input type="text" id="peer-url" class="input-field" placeholder="http://192.168.1.10:8006" required />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="cancel-peer">Cancel</button>
+          <button type="submit" class="btn btn-primary">Trust Peer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notifications -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
