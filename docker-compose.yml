@@ -323,20 +323,19 @@ services:
     entrypoint: >
       /bin/sh -c "
       apk add --no-cache openssh-client &&
-      while true; do
-        echo 'Starting tunnel connection...' &&
-        ssh -T -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -R 80:ui:80 nokey@localhost.run > /tmp/ssh.log 2>&1 &
-        SSH_PID=$$!
-        sleep 4
-        URL=$$(grep -oE 'https://[a-zA-Z0-9.-]+\.lhr\.life' /tmp/ssh.log | head -n 1)
+      touch /tmp/ssh.log &&
+      tail -f /tmp/ssh.log | grep -oE '[a-zA-Z0-9.-]+\.lhr\.life' | while read -r URL; do
         echo ''
         echo '==================================================='
-        echo '   KALPANA OS PUBLIC TUNNEL STARTED'
+        echo '   KALPANA OS PUBLIC TUNNEL ACTIVE'
         echo '   Your public domain is:'
-        echo '   ' $$URL
+        echo '   https://'$$URL
         echo '==================================================='
         echo ''
-        wait $$SSH_PID || true
+      done &
+      while true; do
+        echo 'Starting tunnel connection...'
+        ssh -T -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -R 80:ui:80 nokey@localhost.run > /tmp/ssh.log 2>&1
         sleep 5
       done
       "
