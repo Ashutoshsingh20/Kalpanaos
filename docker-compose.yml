@@ -324,27 +324,52 @@ services:
       - /bin/sh
       - -c
       - |
-        apk add --no-cache openssh-client &&
-        touch /tmp/ssh.log &&
         while true; do
-          URL=$$(grep -oE '[a-zA-Z0-9.-]+\.lhr\.life' /tmp/ssh.log | tail -n 1)
-          if [ -n "$$URL" ] && [ "$$URL" != "$$LAST_URL" ]; then
-            echo ''
-            echo '==================================================='
-            echo '   KALPANA OS PUBLIC TUNNEL ACTIVE'
-            echo '   Your public domain is:'
-            echo '   https://'$$URL
-            echo '==================================================='
-            echo ''
-            LAST_URL=$$URL
+          echo 'Installing packages...'
+          if apk add --no-cache libc6-compat wget ca-certificates; then
+            break
           fi
-          sleep 2
-        done &
+          echo 'Package installation failed, retrying...'
+          sleep 3
+        done
         while true; do
-          echo 'Starting tunnel connection...'
-          ssh -T -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -R 80:ui:80 nokey@localhost.run > /tmp/ssh.log 2>&1
+          echo 'Downloading cloudflared...'
+          if wget -q -O /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 && \
+             chmod +x /usr/local/bin/cloudflared && \
+             touch /tmp/cloudflared.log; then
+            echo 'Environment initialized successfully!'
+            break
+          fi
+          echo 'Download failed, retrying...'
+          sleep 3
+        done
+        (
+          while true; do
+            URL=$$(grep -oE '[a-zA-Z0-9.-]+\.trycloudflare\.com' /tmp/cloudflared.log | tail -n 1)
+
+            if [ -n "$$URL" ] && [ "$$URL" != "$$LAST_URL" ]; then
+              echo ''
+              echo '==================================================='
+              echo '   KALPANA OS PUBLIC TUNNEL ACTIVE'
+              echo '   Your public domain is:'
+              echo '   https://'$$URL
+              echo '==================================================='
+              echo ''
+              LAST_URL=$$URL
+            fi
+            sleep 2
+          done
+        ) &
+        while true; do
+          echo 'Starting Cloudflare tunnel connection...'
+          cloudflared tunnel --url http://ui:80 > /tmp/cloudflared.log 2>&1
           sleep 5
         done
+
+
+
+
+
 
 
   # ── Observability ───────────────────────────────────────────
