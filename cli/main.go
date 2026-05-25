@@ -503,6 +503,114 @@ var auditCmd = &cobra.Command{
 	},
 }
 
+// ─── Apps command ──────────────────────────────────────────────────────────────
+
+var appsCmd = &cobra.Command{
+	Use:   "apps",
+	Short: "Manage app builds and deployments (web, Android, iOS)",
+}
+
+var appsListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List registered applications",
+	Run: func(cmd *cobra.Command, args []string) {
+		data, status, err := doRequest("GET", baseURL("col")+"/apps/deployments", nil)
+		if err != nil || status >= 400 {
+			fail("Failed to list apps (HTTP %d): %s", status, string(data))
+		}
+		var apps []map[string]interface{}
+		json.Unmarshal(data, &apps)
+		if len(apps) == 0 {
+			fmt.Println("No apps registered. Use 'kalpana apps register' to register one.")
+			return
+		}
+		fmt.Printf("%-25s %-25s %-10s %-12s\n", "APP ID", "NAME", "PLATFORM", "STATUS")
+		fmt.Println(strings.Repeat("─", 75))
+		for _, a := range apps {
+			fmt.Printf("%-25s %-25s %-10s %-12s\n", a["id"], a["name"], a["platform"], a["status"])
+		}
+	},
+}
+
+var appsRegisterCmd = &cobra.Command{
+	Use:   "register",
+	Short: "Register a new application",
+	Run: func(cmd *cobra.Command, args []string) {
+		name, _ := cmd.Flags().GetString("name")
+		platform, _ := cmd.Flags().GetString("platform")
+		repo, _ := cmd.Flags().GetString("repo")
+		branch, _ := cmd.Flags().GetString("branch")
+
+		if name == "" || platform == "" || repo == "" {
+			fail("--name, --platform, and --repo are required")
+		}
+
+		payload := map[string]string{
+			"name": name, "platform": platform, "git_repo": repo, "branch": branch,
+		}
+		data, status, err := doRequest("POST", baseURL("col")+"/apps/register", payload)
+		if err != nil || status >= 400 {
+			fail("Failed to register app (HTTP %d): %s", status, string(data))
+		}
+		fmt.Println("✓ App registered successfully")
+		printJSON(data)
+	},
+}
+
+var appsBuildCmd = &cobra.Command{
+	Use:   "build <app-id>",
+	Short: "Trigger a compilation build for an application",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		payload := map[string]string{"app_id": args[0]}
+		data, status, err := doRequest("POST", baseURL("col")+"/apps/build", payload)
+		if err != nil || status >= 400 {
+			fail("Build failed (HTTP %d): %s", status, string(data))
+		}
+		fmt.Println("✓ Compilation build triggered in background")
+		printJSON(data)
+	},
+}
+
+var appsBuildsCmd = &cobra.Command{
+	Use:   "builds",
+	Short: "List application build task history",
+	Run: func(cmd *cobra.Command, args []string) {
+		data, status, err := doRequest("GET", baseURL("col")+"/apps/builds", nil)
+		if err != nil || status >= 400 {
+			fail("Failed (HTTP %d): %s", status, string(data))
+		}
+		var builds []map[string]interface{}
+		json.Unmarshal(data, &builds)
+		if len(builds) == 0 {
+			fmt.Println("No builds found.")
+			return
+		}
+		fmt.Printf("%-32s %-25s %-10s %-12s %-20s\n", "BUILD ID", "APP NAME", "PLATFORM", "STATUS", "ARTIFACT")
+		fmt.Println(strings.Repeat("─", 100))
+		for _, b := range builds {
+			art := fmt.Sprint(b["artifact_file"])
+			if art == "" || art == "<nil>" {
+				art = "—"
+			}
+			fmt.Printf("%-32s %-25s %-10s %-12s %-20s\n", b["id"], b["app_name"], b["platform"], b["status"], art)
+		}
+	},
+}
+
+var appsLogsCmd = &cobra.Command{
+	Use:   "logs <build-id>",
+	Short: "View build logs for a compilation task",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		data, status, err := doRequest("GET", baseURL("col")+"/apps/builds/"+args[0]+"/logs", nil)
+		if err != nil || status >= 400 {
+			fail("Failed to get logs (HTTP %d): %s", status, string(data))
+		}
+		fmt.Println(string(data))
+	},
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 func min(a, b int) int {
@@ -552,10 +660,18 @@ func main() {
 	// Search
 	searchCmd.Flags().IntP("top", "k", 5, "Number of results")
 
+	// Apps
+	appsRegisterCmd.Flags().StringP("name", "n", "", "App name (required)")
+	appsRegisterCmd.Flags().StringP("platform", "p", "", "Platform (web, android, ios) (required)")
+	appsRegisterCmd.Flags().StringP("repo", "r", "", "Git repository URL (required)")
+	appsRegisterCmd.Flags().StringP("branch", "b", "main", "Git branch name")
+	appsCmd.AddCommand(appsListCmd, appsRegisterCmd, appsBuildCmd, appsBuildsCmd, appsLogsCmd)
+
 	rootCmd.AddCommand(
 		authCmd, configCmd, servicesCmd, agentsCmd,
 		chatCmd, confirmCmd, rejectCmd,
 		searchCmd, statusCmd, nodeCmd, auditCmd, tasksCmd,
+		appsCmd,
 	)
 
 	if err := rootCmd.Execute(); err != nil {

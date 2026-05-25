@@ -17,7 +17,7 @@ Instead, KalpanaOS introduces a **Distributed Cognitive Infrastructure**: a self
 
 ## 🏗️ Architectural Deep Dive
 
-KalpanaOS is structured as a decentralized suite of lightweight Go microservices connected via a resilient NATS JetStream event bus and private Docker networks. The ecosystem was built iteratively across **Five Core Phases**:
+KalpanaOS is structured as a decentralized suite of lightweight Go microservices connected via a resilient NATS JetStream event bus and private Docker networks. The ecosystem was built iteratively across **Six Core Phases**:
 
 ### Phase 1: The Foundation (Identity & Execution)
 *   **SIL (Sovereign Identity Layer):** A zero-trust RBAC service managing JWT authentication and multi-tenant access control. Every microservice API call requires a cryptographically signed SIL token.
@@ -52,52 +52,59 @@ The final phase that elevated KalpanaOS from a single-node AI brain into a resil
 *   **Distributed Scheduler:** The `SchedulerAgent` evaluates live node telemetry across the entire graph (via `ikg` and Prometheus), tunneling workload deployment JSONs to the most optimal edge node over the NATS event bus.
 *   **Memory Compression Lifecycle:** To prevent data bloat, the `MemoryCompressionAgent` operates as a perpetual garbage collector. It routinely fetches raw episodic logs from Qdrant, commands the LLM to synthesize them into a dense semantic "Insight", and surgically deletes the raw vectors to compress the memory footprint indefinitely.
 
+### Phase 6: Application Compiler & Portal
+- **App Compiler Service (`services/col/apps.go`):** Simulates git-based compilation pipelines to build and compile Web bundles, Android APKs, and iOS IPAs (via remote macOS peer connections) directly from private source repositories.
+- **Subdomain Web Server Routing:** Supports dynamic resolution of deployed web applications via host-header matching, routing wildcard domains (`[app-id].[host].nip.io`) or custom domain records directly to static web directories.
+
+---
+
+## 🌐 Public Portal & Secure Download Registration
+
+To make hosting and exposure of KalpanaOS user-friendly, the Web UI is structured into two main access routes:
+
+### 1. Public Landing Page (`/` -> `index.html`)
+The default root path serves a public landing page containing an **About Section** detailing the OS architecture, and a **Downloads Portal** offering installation utilities:
+* **Bootstrapper Installer Script (`install.sh`):** A shell utility to automatically check requirements and pull the stack.
+* **CLI Control Binary (`kalpana`):** The compiled terminal controller binary.
+
+### 2. Administrative Console (`/dashboard.html`)
+The main control panel, chat interface, event logs, and app compiler terminals are situated on a dedicated page (`/dashboard.html`). If a user has valid session credentials stored in their browser, they bypass the login wall automatically.
+
+### 3. Register-on-Download Flow
+Clicking any download action on the public landing page triggers a secure **Admin Registration Modal**:
+* Prompts the user to create an administrative account (Email & Password).
+* Submits a request to the Sovereign Identity Layer (`POST /api/sil/auth/register`), which hashes the credentials and saves the user directly in the database, mapping them to the `admin` role.
+* Automatically saves the JWT access and refresh tokens to local storage.
+* Initiates the browser file download.
+* **Auto-Login:** Once registered, clicking "Launch Console" takes the user directly to their management dashboard at `/dashboard.html` without prompting them to log in again.
+
 ---
 
 ## 🚀 Deployment & Installation
 
 KalpanaOS uses `docker-compose` for rapid orchestration. It requires a Linux/macOS host with Docker installed and at least 4GB of RAM.
 
-### 1. Environment Configuration
-
-Clone the repository and set up your `.env` file:
-
+### 1. Fast Bootstrap Installer
+You can download the installer directly from your public instance URL. Simply run:
 ```bash
-git clone https://github.com/kalpanaos/kalpanaos.git
-cd kalpanaos
-
-# Create environment configuration
-cat <<EOF > .env
-ADMIN_EMAIL=admin@kalpana.os
-ADMIN_PASSWORD=Kalpana@2026!
-NVIDIA_API_KEY=your_nvidia_api_key_here
-NVIDIA_API_BASE_URL=https://integrate.api.nvidia.com/v1
-NVIDIA_CHAT_MODEL=meta/llama-3.1-8b-instruct
-EOF
+curl -sSL http://<your-public-url>/install.sh | bash
 ```
 
-### 2. Bootstrapping the Mesh
-
-Bring up the entire suite of cognitive infrastructure:
-
-```bash
-docker-compose up -d --build
-```
-
-This will launch:
-*   **Core Services**: `sil` (8001), `col` (8002), `ssi` (8003), `aicp` (8004), `aaf` (8005)
-*   **Federation & State**: `nats` (4222), `qdrant` (6333), `pge` (8007), `ikg` (8008), `fdcl` (8009)
-*   **Telemetry**: `prometheus` (9090), `loki` (3100), `tempo` (3200), `grafana` (3000)
-
-### 3. API Verification
-
-Verify the system is running by checking the Federated Registry:
-
-```bash
-curl -s http://localhost:8009/registry/agents | jq
-```
-
-You should see a JSON array of all active, gossiping agents connected to your mesh.
+### 2. Exposing KalpanaOS with Zero-Config public URL
+If your edge server is behind a local NAT router or firewall, the stack includes a self-healing **`tunnel`** service inside `docker-compose.yml` that opens a secure reverse tunnel using `localhost.run`.
+* On startup, the container automatically establishes a secure tunnel mapping to the Nginx UI.
+* You can view your generated public HTTPS address by checking the container logs:
+  ```bash
+  docker logs kalpana-tunnel
+  ```
+  **Output Box Example:**
+  ```text
+  ===================================================
+     KALPANA OS PUBLIC TUNNEL STARTED
+     Your public domain is:
+     https://9a8e3a6c90721a.lhr.life
+  ===================================================
+  ```
 
 ---
 

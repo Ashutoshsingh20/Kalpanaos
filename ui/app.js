@@ -11,6 +11,7 @@ const API = {
   AICP: '/api/aicp',
   AAF:  '/api/aaf',
   ORCH: '/api/orchestrator',
+  CBAL: '/api/cbal',
 };
 
 // ─── State ───────────────────────────────────────────────────
@@ -176,6 +177,10 @@ function navigateTo(page) {
     case 'memory':    loadMemory(''); break;
     // Phase 3
     case 'topology':  loadTopologyAgents(); break;
+    // Phase 6
+    case 'analytics': loadAnalytics(); break;
+    // App Compiler
+    case 'apps':      loadAppsPage(); break;
   }
 }
 
@@ -566,14 +571,14 @@ async function updateInferenceBadge() {
     if (res && res.nvidia_api) {
       if (res.nvidia_api.startsWith('error')) {
         badge.innerHTML = `🛡️ Sovereign Mode (Local LLaMA 3.2)`;
-        badge.style.background = 'rgba(34, 197, 94, 0.1)';
-        badge.style.color = '#22c55e';
-        badge.style.borderColor = 'rgba(34, 197, 94, 0.2)';
+        badge.style.background = 'rgba(0, 0, 0, 0.02)';
+        badge.style.color = 'var(--text-secondary)';
+        badge.style.borderColor = 'var(--border)';
       } else {
         badge.innerHTML = `⚡ Cloud Mode (${res.model || 'NVIDIA NIM'})`;
-        badge.style.background = 'rgba(99, 102, 241, 0.1)';
-        badge.style.color = '#818cf8';
-        badge.style.borderColor = 'rgba(99, 102, 241, 0.2)';
+        badge.style.background = 'var(--accent)';
+        badge.style.color = '#ffffff';
+        badge.style.borderColor = 'var(--accent)';
       }
     }
   } catch (err) {
@@ -590,6 +595,8 @@ function startAutoRefresh() {
     if (activePage.id === 'page-agents') loadTasks();
     if (activePage.id === 'page-anomalies') loadAnomalies();
     if (activePage.id === 'page-topology') loadTopologyAgents();
+    if (activePage.id === 'page-analytics') loadAnalytics();
+    if (activePage.id === 'page-apps') loadAppsPage();
   }, 15000);
 }
 
@@ -877,6 +884,108 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Phase 3: Init SSE stream (always active)
   initSSEStream();
+
+  // Phase 6: CBAL Analytics
+  $('run-sql-btn')?.addEventListener('click', runAnalyticsSQL);
+  $('trigger-compression-btn')?.addEventListener('click', triggerCBALCompression);
+  $('refresh-analytics-btn')?.addEventListener('click', loadAnalytics);
+  document.querySelectorAll('.sql-template-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const q = btn.dataset.query;
+      const input = $('sql-query-input');
+      if (input) {
+        input.value = q;
+        runAnalyticsSQL();
+      }
+    });
+  });
+
+  $('btn-do-import-url')?.addEventListener('click', async () => {
+    const table = $('import-url-table').value.trim();
+    const url = $('import-url-path').value.trim();
+
+    if (!table || !url) {
+      showImportStatus('Table name and URL are required', 'danger');
+      return;
+    }
+
+    showImportStatus('Importing dataset...', 'info');
+
+    try {
+      const res = await api('CBAL', '/datasets/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          table_name: table,
+          source_type: 'url',
+          url: url
+        })
+      });
+
+      if (res && res.success) {
+        showImportStatus(res.message, 'success');
+        $('import-url-table').value = '';
+        $('import-url-path').value = '';
+        loadDatasets();
+      } else {
+        showImportStatus(res.error || 'Failed to import dataset', 'danger');
+      }
+    } catch (e) {
+      showImportStatus(`Error: ${e.message}`, 'danger');
+    }
+  });
+
+  $('btn-do-import-paste')?.addEventListener('click', async () => {
+    const table = $('import-paste-table').value.trim();
+    const csvData = $('import-paste-data').value.trim();
+
+    if (!table || !csvData) {
+      showImportStatus('Table name and CSV content are required', 'danger');
+      return;
+    }
+
+    showImportStatus('Importing dataset...', 'info');
+
+    try {
+      const res = await api('CBAL', '/datasets/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          table_name: table,
+          source_type: 'paste',
+          csv_data: csvData
+        })
+      });
+
+      if (res && res.success) {
+        showImportStatus(res.message, 'success');
+        $('import-paste-table').value = '';
+        $('import-paste-data').value = '';
+        loadDatasets();
+      } else {
+        showImportStatus(res.error || 'Failed to import dataset', 'danger');
+      }
+    } catch (e) {
+      showImportStatus(`Error: ${e.message}`, 'danger');
+    }
+  });
+
+  // App Compiler UI events
+  $('open-register-app-modal')?.addEventListener('click', () => {
+    $('app-modal').classList.remove('hidden');
+  });
+  $('close-app-modal')?.addEventListener('click', () => {
+    $('app-modal').classList.add('hidden');
+  });
+  $('cancel-app')?.addEventListener('click', () => {
+    $('app-modal').classList.add('hidden');
+  });
+  $('refresh-apps')?.addEventListener('click', loadAppsPage);
+  $('close-logs-btn')?.addEventListener('click', () => {
+    $('build-logs-container').classList.add('hidden');
+  });
+  $('app-form')?.addEventListener('submit', registerNewApp);
+  $('app-modal')?.addEventListener('click', e => {
+    if (e.target === $('app-modal')) $('app-modal').classList.add('hidden');
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1065,6 +1174,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (page === 'orchestrations') loadPlans();
     if (page === 'events') initSSEStream();
     if (page === 'federation') loadFederation();
+    if (page === 'analytics') loadAnalytics();
   });
 });
 
@@ -1220,3 +1330,482 @@ async function loadRemediationLog() {
     `;
   }).join('');
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 6: CBAL Analytics
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function loadAnalytics() {
+  loadDatasets();
+  const risksEl = $('cbal-node-risks');
+  if (!risksEl) return;
+
+  risksEl.innerHTML = '<div class="loading-pulse"></div>';
+
+  try {
+    const data = await api('CBAL', '/insights');
+    if (!data) {
+      risksEl.innerHTML = '<p style="color:var(--text-muted)">CBAL service unreachable or returned no data.</p>';
+      return;
+    }
+
+    // Render risk scores
+    let html = '';
+    const scores = data.topology_risk_scores || {};
+    const anomalies = data.unresolved_anomalies || [];
+
+    if (Object.keys(scores).length === 0 && anomalies.length === 0) {
+      html = '<div style="padding:1rem;text-align:center;color:var(--text-muted)">No active anomalies or risks detected on nodes.</div>';
+    } else {
+      if (Object.keys(scores).length > 0) {
+        html += '<h4 style="margin-bottom:0.5rem;color:var(--text-primary)">Node Risk Scores</h4>';
+        for (const [node, score] of Object.entries(scores)) {
+          const percentage = Math.round(score * 100);
+          const color = score > 0.7 ? 'var(--red)' : score > 0.4 ? 'var(--amber)' : 'var(--green)';
+          html += `
+            <div style="margin-bottom:0.75rem">
+              <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:0.25rem">
+                <span>Node: <strong>${escapeHTML(node)}</strong></span>
+                <span style="color:${color};font-weight:700">${percentage}% Risk</span>
+              </div>
+              <div style="height:6px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:${percentage}%;background:${color};border-radius:3px"></div>
+              </div>
+            </div>`;
+        }
+      }
+
+      if (anomalies.length > 0) {
+        html += '<h4 style="margin-top:1rem;margin-bottom:0.5rem;color:var(--text-primary)">Recent Unresolved Anomalies</h4>';
+        html += anomalies.map(a => `
+          <div style="padding:0.5rem 0.75rem;background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.15);border-radius:6px;margin-bottom:0.5rem;font-size:0.8rem">
+            <div style="display:flex;justify-content:space-between;margin-bottom:0.25rem">
+              <strong style="color:#ef4444">${escapeHTML(a.severity)}: ${escapeHTML(a.type)}</strong>
+              <span style="color:var(--text-muted);font-size:0.75rem">${relativeTime(a.timestamp)}</span>
+            </div>
+            <div style="color:var(--text-secondary)">${escapeHTML(a.description)}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem">Node: ${escapeHTML(a.node_id)}</div>
+          </div>
+        `).join('');
+      }
+    }
+
+    risksEl.innerHTML = html;
+  } catch (e) {
+    risksEl.innerHTML = `<p style="color:var(--danger)">Failed to load CBAL insights: ${e.message}</p>`;
+  }
+}
+
+async function runAnalyticsSQL() {
+  const queryInput = $('sql-query-input');
+  const errorEl = $('sql-query-error');
+  const thead = $('sql-results-thead');
+  const tbody = $('sql-results-tbody');
+  const runBtn = $('run-sql-btn');
+
+  if (!queryInput || !tbody) return;
+
+  const query = queryInput.value.trim();
+  if (!query) { toast('Enter a query first', 'warning'); return; }
+
+  runBtn.disabled = true;
+  runBtn.textContent = 'Running...';
+  errorEl.classList.add('hidden');
+  tbody.innerHTML = '<tr><td class="empty-row"><div class="loading-pulse"></div></td></tr>';
+
+  try {
+    const data = await api('CBAL', '/query', {
+      method: 'POST',
+      body: JSON.stringify({ query })
+    });
+
+    if (!data) {
+      throw new Error('No response from CBAL service');
+    }
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    const cols = data.columns || [];
+    const rows = data.rows || [];
+
+    // Render headers
+    if (cols.length === 0) {
+      thead.innerHTML = '<tr><th>Result</th></tr>';
+    } else {
+      thead.innerHTML = `<tr>${cols.map(c => `<th>${escapeHTML(c)}</th>`).join('')}</tr>`;
+    }
+
+    // Render rows
+    if (rows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="${cols.length || 1}" class="empty-row">Query executed successfully. 0 rows returned.</td></tr>`;
+    } else {
+      tbody.innerHTML = rows.map(row => `
+        <tr>
+          ${cols.map(c => {
+            const val = row[c];
+            const strVal = val === null || val === undefined ? 'NULL' : typeof val === 'object' ? JSON.stringify(val) : String(val);
+            return `<td>${escapeHTML(strVal)}</td>`;
+          }).join('')}
+        </tr>
+      `).join('');
+    }
+  } catch (e) {
+    errorEl.textContent = e.message;
+    errorEl.classList.remove('hidden');
+    thead.innerHTML = '<tr><th>Error</th></tr>';
+    tbody.innerHTML = `<tr><td class="empty-row" style="color:var(--danger)">Query failed. Check the error message above.</td></tr>`;
+  } finally {
+    runBtn.disabled = false;
+    runBtn.textContent = '▶ Run Query';
+  }
+}
+
+async function triggerCBALCompression() {
+  const btn = $('trigger-compression-btn');
+  const statusEl = $('cbal-compression-status');
+  if (!btn || !statusEl) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Compressing...';
+  statusEl.innerHTML = '<div class="loading-pulse"></div><p style="text-align:center;margin-top:0.5rem;font-size:0.8rem">Executing CBAL summarization and pruning...</p>';
+
+  try {
+    const data = await api('CBAL', '/compress', { method: 'POST' });
+    if (data && data.compressed) {
+      statusEl.innerHTML = `
+        <div style="color:var(--green);font-weight:600;margin-bottom:0.5rem">✓ Compression Cycle Completed Successfully</div>
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem">Pruned: ${escapeHTML(data.records_pruned)}</div>
+        <div style="padding:0.75rem;background:rgba(255,255,255,0.02);border-radius:6px;border:1px solid rgba(255,255,255,0.05)">
+          <strong>Semantic Memory:</strong><br/>
+          <span style="font-style:italic;color:var(--text-secondary)">"${escapeHTML(data.semantic_memory)}"</span>
+        </div>
+      `;
+      toast('Compression cycle complete', 'success');
+      loadAnalytics(); // Refresh insights/anomalies (pruned records will disappear)
+    } else {
+      throw new Error(data?.error || 'Failed to compress');
+    }
+  } catch (e) {
+    statusEl.innerHTML = `<div style="color:var(--red);font-weight:600">✕ Compression Failed</div><div style="margin-top:0.5rem;font-size:0.8rem;color:var(--text-muted)">${escapeHTML(e.message)}</div>`;
+    toast('Compression failed', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⚡ Compress Telemetry';
+  }
+}
+
+// ─── App Compiler & Deployer ──────────────────────────────────
+async function loadAppsPage() {
+  const appsGrid = $('apps-list-grid');
+  const buildsTbody = $('builds-history-tbody');
+  if (!appsGrid || !buildsTbody) return;
+
+  const [apps, builds] = await Promise.all([
+    api('COL', '/apps/deployments'),
+    api('COL', '/apps/builds'),
+  ]);
+
+  // 1. Render Apps Grid
+  if (!apps || apps.length === 0) {
+    appsGrid.innerHTML = '<div class="search-empty">No applications registered. Click "+ Register Application" to start.</div>';
+  } else {
+    appsGrid.innerHTML = apps.map(app => {
+      let badgeClass = 'badge-blue';
+      if (app.platform === 'android') badgeClass = 'badge-amber';
+      if (app.platform === 'ios') badgeClass = 'badge-purple';
+
+      let statusBadge = '';
+      if (app.status === 'building') statusBadge = '<span class="status-dot unknown" style="animation:thinking 1.2s infinite"></span> Building';
+      else if (app.status === 'success') statusBadge = '<span class="status-dot online"></span> Operational';
+      else if (app.status === 'failed') statusBadge = '<span class="status-dot offline"></span> Build Failed';
+      else statusBadge = '<span class="status-dot neutral"></span> Idle';
+
+      const repoName = app.git_repo.split('/').pop().replace('.git', '');
+
+      // Resolve Web App URL
+      let webAppURL = `/api/col/apps/web/${app.id}/`;
+      let domainInfo = '';
+      if (app.platform === 'web') {
+        const hostIP = window.location.hostname;
+        const hostPort = window.location.port ? `:${window.location.port}` : '';
+        if (app.domain) {
+          webAppURL = `http://${app.domain}${hostPort}`;
+          domainInfo = `<div><span>Domain:</span> <span style="font-family:monospace;font-size:0.8rem">${app.domain}</span></div>`;
+        } else if (hostIP !== 'localhost' && hostIP !== '127.0.0.1') {
+          webAppURL = `http://${app.id}.${hostIP}.nip.io${hostPort}`;
+          domainInfo = `<div><span>Domain:</span> <span style="font-family:monospace;font-size:0.8rem">${app.id}.${hostIP}.nip.io</span></div>`;
+        } else {
+          domainInfo = `<div><span>Domain:</span> <span style="font-family:monospace;font-size:0.8rem">${app.id}.[IP].nip.io</span></div>`;
+        }
+      }
+
+      // Open Web App button if platform is web and status is success
+      const actionButton = app.platform === 'web' && app.status === 'success'
+        ? `<a href="${webAppURL}" target="_blank" class="btn btn-ghost btn-sm" style="margin-top:10px;display:inline-flex">🚀 Open Web App</a>`
+        : '';
+
+      return `
+        <div class="service-card glass">
+          <div class="service-card-header">
+            <span class="service-card-name">${app.name}</span>
+            <span class="badge ${badgeClass}">${app.platform}</span>
+          </div>
+          <div class="service-card-body" style="margin-bottom:12px">
+            <div><span>Repo:</span> <span>${repoName} (${app.branch})</span></div>
+            <div><span>Status:</span> <span>${statusBadge}</span></div>
+            ${domainInfo}
+          </div>
+          <div class="service-card-actions">
+            <button class="btn btn-primary btn-sm" onclick="triggerAppBuild('${app.id}')" ${app.status === 'building' ? 'disabled' : ''}>
+              ⚡ Compile & Deploy
+            </button>
+            ${actionButton}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // 2. Render Builds History
+  if (!builds || builds.length === 0) {
+    buildsTbody.innerHTML = '<tr><td colspan="7" class="empty-row">No compilation builds recorded.</td></tr>';
+  } else {
+    buildsTbody.innerHTML = builds.map(b => {
+      let statusClass = 'task-status-pending';
+      if (b.status === 'building') statusClass = 'task-status-running';
+      else if (b.status === 'success') statusClass = 'task-status-completed';
+      else if (b.status === 'failed') statusClass = 'task-status-failed';
+
+      // Download link if success
+      const downloadLink = b.status === 'success' && b.artifact_file
+        ? `<a href="/api/col/apps/downloads/${b.id}/${b.artifact_file}" class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:0.75rem">📥 Download ${b.artifact_file.split('.').pop().toUpperCase()}</a>`
+        : '—';
+
+      return `
+        <tr>
+          <td><span style="font-family:monospace;font-size:0.75rem">${b.id.substring(0, 16)}</span></td>
+          <td><strong>${b.app_name}</strong></td>
+          <td><span class="badge ${b.platform === 'web' ? 'badge-blue' : b.platform === 'android' ? 'badge-amber' : 'badge-purple'}">${b.platform}</span></td>
+          <td><span class="task-status-badge ${statusClass}">${b.status}</span></td>
+          <td>${formatDate(b.created_at)}</td>
+          <td>${downloadLink}</td>
+          <td>
+            <button class="btn btn-ghost btn-sm" onclick="viewBuildLogs('${b.id}', '${b.app_name}')" style="padding:4px 8px;font-size:0.75rem">
+              📝 Logs
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+}
+
+// Trigger Build API
+async function triggerAppBuild(appID) {
+  toast('Triggering compilation build...', 'info');
+  const res = await api('COL', '/apps/build', {
+    method: 'POST',
+    body: JSON.stringify({ app_id: appID }),
+  });
+  if (res && res.build_id) {
+    toast('Build pipeline started!', 'success');
+    loadAppsPage();
+    // Open logs terminal automatically
+    viewBuildLogs(res.build_id, 'Build Triggered');
+  } else {
+    toast('Failed to trigger build pipeline', 'error');
+  }
+}
+
+// View Build Logs
+async function viewBuildLogs(buildID, appName) {
+  const container = $('build-logs-container');
+  const title = $('build-logs-title');
+  const pre = $('build-logs-pre');
+  if (!container || !title || !pre) return;
+
+  container.classList.remove('hidden');
+  title.textContent = `Streaming Build Output: ${appName} (${buildID.substring(0,16)})`;
+  pre.textContent = 'Loading live terminal compilation output stream...';
+
+  // Perform initial fetch
+  const fetchLogs = async () => {
+    const res = await fetch(`/api/col/apps/builds/${buildID}/logs`, {
+      headers: state.token ? { 'Authorization': `Bearer ${state.token}` } : {},
+    });
+    if (res.ok) {
+      const logs = await res.text();
+      pre.textContent = logs;
+      pre.scrollTop = pre.scrollHeight; // Auto-scroll
+      if (logs.includes('[BUILDING LIVE]') || !logs.includes('Build finished')) {
+        // Continue polling if still building
+        setTimeout(fetchLogs, 1500);
+      }
+    }
+  };
+  
+  fetchLogs();
+}
+
+// Register App Submit handler
+async function registerNewApp(e) {
+  e.preventDefault();
+  const name = $('app-name-input').value;
+  const platform = $('app-platform-input').value;
+  const repo = $('app-repo-input').value;
+  const branch = $('app-branch-input').value;
+  const domain = $('app-domain-input').value;
+
+  const res = await api('COL', '/apps/register', {
+    method: 'POST',
+    body: JSON.stringify({ name, platform, git_repo: repo, branch, domain }),
+  });
+
+  if (res && res.id) {
+    toast('Application registered successfully!', 'success');
+    $('app-modal').classList.add('hidden');
+    $('app-form').reset();
+    loadAppsPage();
+  } else {
+    toast('Failed to register application', 'error');
+  }
+}
+
+// Expose globals for inline HTML triggers
+window.triggerAppBuild = triggerAppBuild;
+window.viewBuildLogs = viewBuildLogs;
+
+async function loadDatasets() {
+  const listEl = $('datasets-explorer-list');
+  const countBadge = $('datasets-count-badge');
+  if (!listEl) return;
+
+  try {
+    const data = await api('CBAL', '/datasets');
+    if (!data || data.error) {
+      listEl.innerHTML = '<p style="color:var(--danger);font-size:0.75rem">Failed to load datasets.</p>';
+      return;
+    }
+
+    countBadge.textContent = data.length;
+
+    if (data.length === 0) {
+      listEl.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--text-muted);font-size:0.8rem">No datasets available.</div>';
+      return;
+    }
+
+    listEl.innerHTML = data.map(db => {
+      const isSystem = ['metric_history', 'orchestration_history', 'anomaly_history'].includes(db.table_name);
+      
+      const columnsList = db.columns.map(c => `
+        <div style="display:flex;justify-content:space-between;padding:2px 0;font-size:0.75rem;color:var(--text-muted)">
+          <span style="font-family:monospace">${escapeHTML(c.name)}</span>
+          <span style="opacity:0.7;font-style:italic">${escapeHTML(c.type.toLowerCase())}</span>
+        </div>
+      `).join('');
+
+      const deleteBtn = isSystem ? '' : `
+        <button class="btn btn-ghost btn-sm" style="padding:2px 6px;color:#ef4444" onclick="event.stopPropagation(); deleteDataset('${escapeHTML(db.table_name)}')">
+          🗑️
+        </button>
+      `;
+
+      return `
+        <div class="dataset-item" style="border:1px solid var(--border);border-radius:6px;background:rgba(0,0,0,0.01);margin-bottom:0.4rem;cursor:pointer" onclick="toggleDatasetDetails('${escapeHTML(db.table_name)}')">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px">
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <span style="font-weight:600;font-size:0.8rem;font-family:monospace">${escapeHTML(db.table_name)}</span>
+              <span style="font-size:0.7rem;color:var(--text-muted)">${db.row_count} rows</span>
+            </div>
+            <div style="display:flex;gap:4px">
+              <button class="btn btn-ghost btn-sm" style="padding:2px 6px" title="Query table" onclick="event.stopPropagation(); selectDatasetForQuery('${escapeHTML(db.table_name)}')">
+                🔎
+              </button>
+              ${deleteBtn}
+            </div>
+          </div>
+          <div id="dataset-details-${escapeHTML(db.table_name)}" class="hidden" style="padding:0 10px 10px 10px;border-top:1px solid rgba(0,0,0,0.03);background:rgba(0,0,0,0.01)">
+            <div style="font-size:0.7rem;font-weight:600;margin:6px 0 4px 0;color:var(--text-secondary)">Columns</div>
+            ${columnsList}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+  } catch (e) {
+    listEl.innerHTML = `<p style="color:var(--danger);font-size:0.75rem">Error: ${e.message}</p>`;
+  }
+}
+
+function showImportStatus(msg, type) {
+  const el = $('import-status-msg');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'import-status-msg';
+  el.classList.remove('hidden');
+  if (type === 'danger') {
+    el.style.background = 'rgba(239, 68, 68, 0.1)';
+    el.style.border = '1px solid rgba(239, 68, 68, 0.2)';
+    el.style.color = '#ef4444';
+  } else if (type === 'success') {
+    el.style.background = 'rgba(34, 197, 94, 0.1)';
+    el.style.border = '1px solid rgba(34, 197, 94, 0.2)';
+    el.style.color = '#22c55e';
+  } else {
+    el.style.background = 'rgba(9, 9, 11, 0.05)';
+    el.style.border = '1px solid var(--border)';
+    el.style.color = 'var(--text-primary)';
+  }
+}
+
+window.toggleDatasetDetails = function(name) {
+  const el = document.getElementById(`dataset-details-${name}`);
+  if (el) el.classList.toggle('hidden');
+};
+
+window.selectDatasetForQuery = function(name) {
+  const input = $('sql-query-input');
+  if (input) {
+    input.value = `SELECT * FROM ${name} LIMIT 10`;
+    runAnalyticsSQL();
+  }
+};
+
+window.deleteDataset = async function(name) {
+  if (!confirm(`Are you sure you want to delete the dataset '${name}'?`)) return;
+
+  try {
+    const res = await api('CBAL', `/datasets/${name}`, {
+      method: 'DELETE'
+    });
+    if (res && res.success) {
+      toast(`Dataset '${name}' deleted successfully`, 'success');
+      loadDatasets();
+    } else {
+      toast(res.error || 'Failed to delete dataset', 'error');
+    }
+  } catch (e) {
+    toast(`Error: ${e.message}`, 'error');
+  }
+};
+
+window.switchImportTab = function(tab) {
+  if (tab === 'url') {
+    $('tab-import-url').classList.add('active');
+    $('tab-import-url').style.borderBottom = '2px solid var(--text-primary)';
+    $('tab-import-paste').classList.remove('active');
+    $('tab-import-paste').style.borderBottom = 'none';
+    $('import-form-url').classList.remove('hidden');
+    $('import-form-paste').classList.add('hidden');
+  } else {
+    $('tab-import-paste').classList.add('active');
+    $('tab-import-paste').style.borderBottom = '2px solid var(--text-primary)';
+    $('tab-import-url').classList.remove('active');
+    $('tab-import-url').style.borderBottom = 'none';
+    $('import-form-paste').classList.remove('hidden');
+    $('import-form-url').classList.add('hidden');
+  }
+  const msgEl = $('import-status-msg');
+  if (msgEl) msgEl.classList.add('hidden');
+};

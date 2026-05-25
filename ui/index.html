@@ -3,615 +3,531 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KalpanaOS — Sovereign AI Cloud</title>
-  <meta name="description" content="KalpanaOS operational dashboard — manage your sovereign AI cloud infrastructure through natural language." />
+  <title>KalpanaOS — Sovereign AI Cloud OS</title>
+  <meta name="description" content="A sovereign, AI-native edge network designed for resource-constrained hosts, managed entirely via natural language." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
+  <style>
+    :root {
+      --bg-base:        #09090b;
+      --bg-surface:     #18181b;
+      --bg-elevated:    #27272a;
+      --border:         rgba(255, 255, 255, 0.08);
+      --border-bright:  rgba(255, 255, 255, 0.2);
+      --text-primary:   #fafafa;
+      --text-secondary: #d4d4d8;
+      --text-muted:     #71717a;
+      --accent:         #ffffff;
+      --accent-glow:    rgba(255, 255, 255, 0.15);
+      --radius:         16px;
+      --radius-sm:      8px;
+      --shadow:         0 10px 30px -10px rgba(0, 0, 0, 0.7);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { font-size: 15px; scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+      line-height: 1.5;
+    }
+
+    /* ─── Grid Background & Orbs ─── */
+    .grid-bg {
+      position: fixed; inset: 0;
+      background-image: 
+        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      background-size: 50px 50px;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .orb-container { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+    .orb {
+      position: absolute; border-radius: 50%; filter: blur(120px); opacity: 0.15;
+      animation: orb-drift 12s ease-in-out infinite alternate;
+    }
+    .orb-1 { width: 600px; height: 600px; background: #52525b; top: -200px; left: -100px; }
+    .orb-2 { width: 500px; height: 500px; background: #3f3f46; bottom: -150px; right: -50px; animation-delay: -4s; }
+    .orb-3 { width: 400px; height: 400px; background: #71717a; top: 40%; left: 35%; animation-delay: -8s; }
+    @keyframes orb-drift { from { transform: translate(0,0) scale(1); } to { transform: translate(40px,30px) scale(1.1); } }
+
+    /* ─── Layout ─── */
+    header {
+      position: sticky; top: 0; z-index: 100;
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      background: rgba(9, 9, 11, 0.7);
+    }
+    .header-container {
+      max-width: 1100px; margin: 0 auto; padding: 20px 24px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.25rem; text-decoration: none; color: var(--text-primary); }
+    .logo-icon { font-size: 1.6rem; }
+    nav { display: flex; align-items: center; gap: 32px; }
+    nav a { color: var(--text-secondary); text-decoration: none; font-size: 0.9rem; font-weight: 500; transition: color 0.2s; }
+    nav a:hover { color: var(--text-primary); }
+
+    /* ─── Buttons ─── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 22px; border-radius: var(--radius-sm);
+      font-size: 0.9rem; font-weight: 500; cursor: pointer;
+      border: none; transition: all 0.2s ease; text-decoration: none;
+      font-family: 'Inter', sans-serif;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #09090b;
+      box-shadow: 0 4px 12px rgba(255,255,255,0.15);
+    }
+    .btn-primary:hover {
+      background: #e4e4e7;
+      transform: translateY(-1px);
+    }
+    .btn-ghost {
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-primary);
+    }
+
+    /* ─── Hero Section ─── */
+    .hero {
+      max-width: 800px; margin: 0 auto; padding: 120px 24px 80px;
+      text-align: center; position: relative; z-index: 10;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 14px; border-radius: 9999px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);
+      margin-bottom: 24px;
+    }
+    .hero-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
+    h1 {
+      font-size: 3.5rem; font-weight: 800; letter-spacing: -0.03em;
+      line-height: 1.15; margin-bottom: 24px;
+      background: linear-gradient(180deg, #fff 0%, #a1a1aa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero-desc {
+      font-size: 1.2rem; color: var(--text-secondary);
+      margin-bottom: 40px; line-height: 1.6;
+    }
+    .hero-actions { display: flex; justify-content: center; gap: 16px; }
+
+    /* ─── Sections ─── */
+    section {
+      max-width: 1100px; margin: 0 auto; padding: 80px 24px;
+      position: relative; z-index: 10;
+    }
+    .section-title {
+      font-size: 2rem; font-weight: 700; margin-bottom: 12px; text-align: center;
+      letter-spacing: -0.02em;
+    }
+    .section-subtitle {
+      color: var(--text-muted); font-size: 1rem; text-align: center; margin-bottom: 48px;
+    }
+
+    /* ─── Grid Systems ─── */
+    .about-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+    .glass-card {
+      background: rgba(24, 24, 27, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      transition: border-color 0.3s, transform 0.3s;
+    }
+    .glass-card:hover {
+      border-color: var(--border-bright);
+      transform: translateY(-2px);
+    }
+    .card-icon { font-size: 2rem; margin-bottom: 20px; display: block; color: var(--text-primary); }
+    .glass-card h3 { font-size: 1.25rem; font-weight: 600; margin-bottom: 12px; }
+    .glass-card p { color: var(--text-secondary); font-size: 0.95rem; line-height: 1.6; }
+
+    /* ─── Downloads ─── */
+    .download-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 32px; max-width: 800px; margin: 0 auto; }
+    .download-card { display: flex; flex-direction: column; height: 100%; justify-content: space-between; }
+    .download-card ul { margin: 20px 0 32px; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .download-card li { font-size: 0.9rem; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; }
+    .download-card li::before { content: "✓"; color: #22c55e; font-weight: bold; }
+    
+    /* ─── Footer ─── */
+    footer { border-top: 1px solid var(--border); margin-top: 100px; background: rgba(9, 9, 11, 0.9); position: relative; z-index: 10; }
+    .footer-container { max-width: 1100px; margin: 0 auto; padding: 40px 24px; text-align: center; color: var(--text-muted); font-size: 0.85rem; }
+
+    /* ─── Modal ─── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      z-index: 1000; display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+    }
+    .modal-overlay.active { opacity: 1; pointer-events: auto; }
+    
+    .modal-card {
+      width: 440px; padding: 40px; border-radius: 20px;
+      animation: modal-up 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes modal-up { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+
+    .modal-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 8px; text-align: center; }
+    .modal-desc { font-size: 0.85rem; color: var(--text-muted); text-align: center; margin-bottom: 28px; }
+    
+    .modal-tabs {
+      display: flex; background: rgba(255,255,255,0.03);
+      padding: 4px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); margin-bottom: 24px;
+    }
+    .modal-tab {
+      flex: 1; text-align: center; padding: 8px; cursor: pointer;
+      font-size: 0.85rem; font-weight: 500; color: var(--text-muted);
+      border-radius: calc(var(--radius-sm) - 2px); transition: all 0.2s;
+    }
+    .modal-tab.active { background: rgba(255,255,255,0.08); color: var(--text-primary); }
+
+    .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+    .form-group label { font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); }
+    .input-field {
+      width: 100%; padding: 12px 16px; background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--text-primary); font-size: 0.9rem; outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      font-family: 'Inter', sans-serif;
+    }
+    .input-field:focus { border-color: var(--text-primary); box-shadow: 0 0 0 3px rgba(255,255,255,0.05); }
+
+    .modal-btn { width: 100%; justify-content: center; padding: 12px; margin-top: 10px; }
+    .error-box {
+      padding: 10px 14px; border-radius: var(--radius-sm);
+      background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #ef4444; font-size: 0.85rem; margin-bottom: 18px; display: none;
+    }
+
+    .modal-close {
+      position: absolute; top: 20px; right: 20px; cursor: pointer;
+      color: var(--text-muted); font-size: 1.2rem; background: none; border: none;
+    }
+    .modal-close:hover { color: var(--text-primary); }
+  </style>
 </head>
 <body>
-  <!-- Login Screen -->
-  <div id="login-screen" class="login-screen">
-    <div class="login-bg">
-      <div class="orb orb-1"></div>
-      <div class="orb orb-2"></div>
-      <div class="orb orb-3"></div>
-    </div>
-    <div class="login-card glass">
-      <div class="login-logo">
-        <div class="logo-icon">⚛</div>
-        <span class="logo-text">KalpanaOS</span>
-        <span class="logo-sub">Sovereign AI Cloud</span>
-      </div>
-      <form id="login-form" class="login-form">
-        <div class="form-group">
-          <label for="email">Email</label>
-          <input type="email" id="email" placeholder="admin@kalpana.local" autocomplete="email" />
-        </div>
-        <div class="form-group">
-          <label for="password">Password</label>
-          <input type="password" id="password" placeholder="••••••••••" autocomplete="current-password" />
-        </div>
-        <div id="login-error" class="login-error hidden"></div>
-        <button type="submit" id="login-btn" class="btn btn-primary btn-full">
-          <span class="btn-text">Authenticate</span>
-          <span class="btn-spinner hidden">⟳</span>
-        </button>
-      </form>
-      <p class="login-hint">v2.0 Phase 2 · Home Server Edition</p>
-    </div>
+
+  <div class="grid-bg"></div>
+  <div class="orb-container">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
   </div>
 
-  <!-- Main App -->
-  <div id="app" class="app hidden">
-    <!-- Sidebar -->
-    <aside class="sidebar glass">
-      <div class="sidebar-logo">
-        <div class="logo-icon">⚛</div>
+  <header>
+    <div class="header-container">
+      <a href="#" class="logo">
+        <span class="logo-icon">⚛</span>
         <span>KalpanaOS</span>
-      </div>
-      <nav class="sidebar-nav">
-        <button class="nav-item active" data-page="dashboard" id="nav-dashboard">
-          <span class="nav-icon">◈</span>
-          <span>Dashboard</span>
-        </button>
-        <button class="nav-item" data-page="chat" id="nav-chat">
-          <span class="nav-icon">◉</span>
-          <span>AI Control Plane</span>
-        </button>
-        <button class="nav-item" data-page="services" id="nav-services">
-          <span class="nav-icon">◫</span>
-          <span>Services</span>
-        </button>
-        <button class="nav-item" data-page="agents" id="nav-agents">
-          <span class="nav-icon">◎</span>
-          <span>Agents</span>
-        </button>
-        <button class="nav-item" data-page="search" id="nav-search">
-          <span class="nav-icon">◍</span>
-          <span>Knowledge Search</span>
-        </button>
-        <button class="nav-item" data-page="observe" id="nav-observe">
-          <span class="nav-icon">◌</span>
-          <span>Observability</span>
-        </button>
-        <!-- Phase 2 nav -->
-        <button class="nav-item" data-page="anomalies" id="nav-anomalies">
-          <span class="nav-icon">⚠</span>
-          <span>Anomaly Detection</span>
-        </button>
-        <button class="nav-item" data-page="memory" id="nav-memory">
-          <span class="nav-icon">◈</span>
-          <span>Episodic Memory</span>
-        </button>
-        <!-- Phase 3 Nav -->
-        <div class="nav-section-label">Phase 3 · Orchestration</div>
-        <button class="nav-item" data-page="topology" id="nav-topology">
-          <span class="nav-icon">🕸</span>
-          <span>Agent Topology</span>
-        </button>
-        <button class="nav-item" data-page="orchestrations" id="nav-orchestrations">
-          <span class="nav-icon">⚡</span>
-          <span>Orchestrations</span>
-        </button>
-        <button class="nav-item" data-page="events" id="nav-events">
-          <span class="nav-icon">📡</span>
-          <span>Live Events</span>
-        </button>
-        <!-- Phase 4 Nav -->
-        <div class="nav-section-label">Phase 4 · Federation</div>
-        <button class="nav-item" data-page="federation" id="nav-federation">
-          <span class="nav-icon">🌐</span>
-          <span>Federation & Edge</span>
-        </button>
+      </a>
+      <nav>
+        <a href="#about">About</a>
+        <a href="#downloads">Downloads</a>
+        <a href="/dashboard.html" class="btn btn-ghost btn-sm" id="launch-console-btn">Launch Console</a>
       </nav>
-      <div class="sidebar-footer">
-        <div class="user-badge glass">
-          <div class="user-avatar">A</div>
-          <div class="user-info">
-            <span class="user-name" id="sidebar-username">Operator</span>
-            <span class="user-role">Admin</span>
-          </div>
-        </div>
-        <button class="btn-logout" id="logout-btn" title="Logout">⏻</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero Section -->
+    <div class="hero">
+      <div class="hero-badge">
+        <span class="dot"></span>
+        <span>Operational · Local & Public Gateway Live</span>
       </div>
-    </aside>
+      <h1>The Cognitive Cloud Operating System</h1>
+      <p class="hero-desc">
+        A lightweight, AI-native edge network designed for resource-constrained hosts with a strict 4GB RAM budget. Managed organically through natural language.
+      </p>
+      <div class="hero-actions">
+        <a href="#downloads" class="btn btn-primary">Deploy / Download</a>
+        <a href="/dashboard.html" class="btn btn-ghost" id="hero-console-btn">Go to Dashboard</a>
+      </div>
+    </div>
 
-    <!-- Main Content -->
-    <main class="main-content">
-      <!-- Dashboard Page -->
-      <div id="page-dashboard" class="page active">
-        <div class="page-header">
-          <h1>Infrastructure Overview</h1>
-          <div class="header-actions">
-            <span class="status-dot online" id="system-status-dot"></span>
-            <span id="system-status-text">All Systems Operational</span>
-            <button class="btn btn-ghost" id="refresh-dashboard">↻ Refresh</button>
-          </div>
+    <!-- About Section -->
+    <section id="about">
+      <h2 class="section-title">Sovereign Cognitive Infrastructure</h2>
+      <p class="section-subtitle">Core engine capabilities structured across decentralized edge modules.</p>
+      <div class="about-grid">
+        <div class="glass-card">
+          <span class="card-icon">🧠</span>
+          <h3>AI-Native Operations</h3>
+          <p>
+            Abandon traditional heavy DevOps pipelines. The control plane operates natively via conversational AI models on NVIDIA API, converting requests directly into secure host commands.
+          </p>
         </div>
-
-        <!-- Stats Row -->
-        <div class="stats-grid">
-          <div class="stat-card glass">
-            <div class="stat-icon" style="background: linear-gradient(135deg,#6366f1,#8b5cf6)">◫</div>
-            <div class="stat-body">
-              <span class="stat-value" id="stat-services">—</span>
-              <span class="stat-label">Running Services</span>
-            </div>
-            <div class="stat-trend up">↑</div>
-          </div>
-          <div class="stat-card glass">
-            <div class="stat-icon" style="background: linear-gradient(135deg,#06b6d4,#3b82f6)">◎</div>
-            <div class="stat-body">
-              <span class="stat-value" id="stat-agents">—</span>
-              <span class="stat-label">Active Agents</span>
-            </div>
-            <div class="stat-trend up">↑</div>
-          </div>
-          <div class="stat-card glass">
-            <div class="stat-icon" style="background: linear-gradient(135deg,#10b981,#059669)">◍</div>
-            <div class="stat-body">
-              <span class="stat-value" id="stat-vectors">—</span>
-              <span class="stat-label">Indexed Documents</span>
-            </div>
-            <div class="stat-trend neutral">→</div>
-          </div>
-          <div class="stat-card glass">
-            <div class="stat-icon" style="background: linear-gradient(135deg,#f59e0b,#ef4444)">◉</div>
-            <div class="stat-body">
-              <span class="stat-value" id="stat-pending">—</span>
-              <span class="stat-label">Pending Approvals</span>
-            </div>
-            <div class="stat-trend neutral" id="pending-trend">→</div>
-          </div>
+        <div class="glass-card">
+          <span class="card-icon">🕸</span>
+          <h3>Federated P2P Mesh</h3>
+          <p>
+            Nodes register, coordinate, and delegate compute tasks directly over a NATS JetStream event bus. The system dynamically runs schedulers to place container workloads on optimal nodes.
+          </p>
         </div>
-
-        <!-- Node Info + Services -->
-        <div class="dashboard-grid">
-          <div class="card glass">
-            <div class="card-header">
-              <h3>Node Information</h3>
-              <span class="badge badge-green">Online</span>
-            </div>
-            <div class="node-info" id="node-info">
-              <div class="info-row"><span>Hostname</span><span id="node-hostname">—</span></div>
-              <div class="info-row"><span>CPU Cores</span><span id="node-cpu">—</span></div>
-              <div class="info-row"><span>Total Memory</span><span id="node-mem">—</span></div>
-              <div class="info-row"><span>Docker Version</span><span id="node-docker">—</span></div>
-              <div class="info-row"><span>Uptime</span><span id="node-uptime">—</span></div>
-            </div>
-          </div>
-
-          <div class="card glass">
-            <div class="card-header">
-              <h3>Service Health</h3>
-              <button class="btn btn-ghost btn-sm" id="deploy-service-btn">+ Deploy</button>
-            </div>
-            <div class="service-list" id="service-health-list">
-              <div class="loading-pulse"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Audit Log -->
-        <div class="card glass">
-          <div class="card-header">
-            <h3>Recent Audit Log</h3>
-            <span class="badge badge-blue">Live</span>
-          </div>
-          <div class="audit-table-wrap">
-            <table class="audit-table">
-              <thead>
-                <tr><th>Time</th><th>Operator</th><th>Action</th><th>Resource</th><th>Detail</th></tr>
-              </thead>
-              <tbody id="audit-log-body">
-                <tr><td colspan="5" class="empty-row">Loading audit log…</td></tr>
-              </tbody>
-            </table>
-          </div>
+        <div class="glass-card">
+          <span class="card-icon">◈</span>
+          <h3>Semantic Memory Compression</h3>
+          <p>
+            Infrastructure telemetry, event logs, and status updates are perpetually vectorized in Qdrant. A background memory agent synthesizes logs into dense insights, preserving host disk.
+          </p>
         </div>
       </div>
+    </section>
 
-      <!-- AI Chat Page -->
-      <div id="page-chat" class="page">
-        <div class="page-header">
-          <h1>AI Control Plane</h1>
-          <div class="header-actions">
-            <span class="model-badge glass" id="chat-model-badge">⚡ meta/llama-3.1-8b-instruct</span>
-            <button class="btn btn-ghost" id="new-session-btn">+ New Session</button>
+    <!-- Downloads Section -->
+    <section id="downloads">
+      <h2 class="section-title">Get KalpanaOS</h2>
+      <p class="section-subtitle">Expose the system on your network and download binaries. Requires registration.</p>
+      <div class="download-grid">
+        <!-- Script Installer -->
+        <div class="glass-card download-card">
+          <div>
+            <span class="card-icon">⚡</span>
+            <h3>Bootstrapper Script</h3>
+            <p>One-line installation script to configure Docker networks and bootstrap the full microservice mesh.</p>
+            <ul>
+              <li>Checks Docker & Compose environment</li>
+              <li>Generates client security certificates</li>
+              <li>Configures local and public gateway parameters</li>
+            </ul>
           </div>
+          <button class="btn btn-primary btn-full download-trigger" data-file="install.sh">Download Installer</button>
         </div>
 
-        <div class="chat-layout">
-          <div class="chat-container glass">
-            <div class="chat-messages" id="chat-messages">
-              <div class="chat-welcome">
-                <div class="welcome-icon">⚛</div>
-                <h3>KalpanaAI is ready</h3>
-                <p>Ask me anything about your infrastructure. I can deploy services, check status, search your knowledge base, and run agents — all through natural language.</p>
-                <div class="quick-prompts">
-                  <button class="quick-prompt" data-prompt="What services are currently running?">What services are running?</button>
-                  <button class="quick-prompt" data-prompt="Give me an infrastructure status report">Infrastructure report</button>
-                  <button class="quick-prompt" data-prompt="Search my knowledge base for deployment guides">Search knowledge base</button>
-                  <button class="quick-prompt" data-prompt="Run the InfraReportAgent">Run InfraReportAgent</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="chat-input-area">
-              <div id="pending-confirmation" class="pending-banner hidden">
-                <span class="pending-icon">⚠</span>
-                <span id="pending-desc">Pending command requires confirmation</span>
-                <div class="pending-actions">
-                  <button class="btn btn-danger btn-sm" id="confirm-cmd-btn">✓ Confirm</button>
-                  <button class="btn btn-ghost btn-sm" id="reject-cmd-btn">✕ Reject</button>
-                </div>
-              </div>
-              <div class="chat-input-row">
-                <textarea
-                  id="chat-input"
-                  class="chat-textarea"
-                  placeholder="Ask KalpanaAI anything…"
-                  rows="1"
-                ></textarea>
-                <button class="btn btn-primary chat-send-btn" id="chat-send">
-                  <span>Send</span>
-                </button>
-              </div>
-              <div class="chat-footer-hint">KalpanaAI will ask for confirmation before any destructive action</div>
-            </div>
+        <!-- CLI Binary -->
+        <div class="glass-card download-card">
+          <div>
+            <span class="card-icon">📦</span>
+            <h3>CLI Control Tool</h3>
+            <p>The native compiled Kalpana CLI binary to manage your nodes, compile apps, and query endpoints.</p>
+            <ul>
+              <li>Tail build logs and trigger compiles</li>
+              <li>Authenticate from external terminals</li>
+              <li>Check cluster topology and agent logs</li>
+            </ul>
           </div>
+          <button class="btn btn-ghost btn-full download-trigger" data-file="kalpana">Download CLI Binary</button>
         </div>
       </div>
+    </section>
+  </main>
 
-      <!-- Services Page -->
-      <div id="page-services" class="page">
-        <div class="page-header">
-          <h1>Services</h1>
-          <div class="header-actions">
-            <button class="btn btn-primary" id="open-deploy-modal">+ Deploy Service</button>
-          </div>
-        </div>
-        <div class="services-grid" id="services-grid">
-          <div class="loading-pulse"></div>
-        </div>
+  <footer>
+    <div class="footer-container">
+      &copy; 2026 KalpanaOS Project. Released under Sovereign Cognitive License.
+    </div>
+  </footer>
+
+  <!-- Auth/Register Modal -->
+  <div class="modal-overlay" id="auth-modal">
+    <div class="glass-card modal-card" style="position: relative;">
+      <button class="modal-close" id="modal-close-btn">&times;</button>
+      <div class="modal-title" id="modal-title-text">Register OS Account</div>
+      <div class="modal-desc">Create administrative credentials to secure your OS and unlock downloading.</div>
+      
+      <div class="modal-tabs">
+        <div class="modal-tab active" id="tab-register">Register</div>
+        <div class="modal-tab" id="tab-login">Log In</div>
       </div>
 
-      <!-- Agents Page -->
-      <div id="page-agents" class="page">
-        <div class="page-header">
-          <h1>Autonomous Agents</h1>
-          <button class="btn btn-primary" id="run-agent-btn">▶ Run Agent</button>
-        </div>
-        <div class="agents-layout">
-          <div class="card glass">
-            <div class="card-header"><h3>Registered Agents</h3></div>
-            <div id="agents-list" class="agents-list">
-              <div class="loading-pulse"></div>
-            </div>
-          </div>
-          <div class="card glass">
-            <div class="card-header">
-              <h3>Task Queue</h3>
-              <button class="btn btn-ghost btn-sm" id="refresh-tasks">↻</button>
-            </div>
-            <div id="tasks-list" class="tasks-list">
-              <div class="loading-pulse"></div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <div class="error-box" id="modal-error"></div>
 
-      <!-- Knowledge Search Page -->
-      <div id="page-search" class="page">
-        <div class="page-header">
-          <h1>Knowledge Search</h1>
-        </div>
-        <div class="search-layout">
-          <div class="search-bar-wrap glass">
-            <span class="search-icon">⌕</span>
-            <input type="text" id="search-input" class="search-input" placeholder="Search your knowledge base semantically…" />
-            <button class="btn btn-primary" id="search-btn">Search</button>
-          </div>
-          <div class="ingest-section">
-            <div class="card glass">
-              <div class="card-header">
-                <h3>Ingest Document</h3>
-              </div>
-              <div class="ingest-form">
-                <textarea id="ingest-text" class="ingest-textarea" placeholder="Paste text to add to your knowledge base…" rows="4"></textarea>
-                <input type="text" id="ingest-source" class="input-field" placeholder="Source label (e.g. deployment-guide)" />
-                <button class="btn btn-primary" id="ingest-btn">+ Ingest to Knowledge Base</button>
-              </div>
-            </div>
-          </div>
-          <div id="search-results" class="search-results">
-            <div class="search-empty">
-              <span class="search-empty-icon">◍</span>
-              <p>Search results will appear here</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Observability Page -->
-      <div id="page-observe" class="page">
-        <div class="page-header">
-          <h1>Observability</h1>
-          <div class="header-actions">
-            <a href="http://localhost:3001" target="_blank" class="btn btn-ghost">Open Grafana ↗</a>
-            <a href="http://localhost:9090" target="_blank" class="btn btn-ghost">Open Prometheus ↗</a>
-          </div>
-        </div>
-        <div class="observe-grid">
-          <div class="card glass observe-card">
-            <div class="card-header"><h3>Service Health Status</h3></div>
-            <div id="observe-health" class="observe-health">
-              <div class="loading-pulse"></div>
-            </div>
-          </div>
-          <div class="card glass observe-card">
-            <div class="card-header"><h3>Grafana Dashboard</h3></div>
-            <div class="grafana-embed-wrap">
-              <iframe
-                src=""
-                class="grafana-iframe"
-                id="grafana-iframe"
-                title="KalpanaOS Grafana Dashboard"
-              ></iframe>
-              <div class="grafana-fallback" id="grafana-fallback">
-                <p>Grafana not reachable yet. <a href="" id="grafana-fallback-link" target="_blank">Open directly →</a></p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Phase 2: Anomaly Detection Page -->
-      <div id="page-anomalies" class="page">
-        <div class="page-header">
-          <h1>Anomaly Detection</h1>
-          <div class="header-actions">
-            <span id="anomaly-scan-time" class="badge badge-blue" style="display:none"></span>
-            <button class="btn btn-primary" id="scan-anomalies-btn">⚡ Run Diagnostic Scan</button>
-          </div>
-        </div>
-
-        <div class="card glass" style="margin-bottom:1.5rem">
-          <div class="card-header">
-            <h3>AI Infrastructure Analysis</h3>
-            <span class="badge badge-green">Powered by LLaMA 3.1</span>
-          </div>
-          <p style="color:var(--text-muted);padding:1rem 0 0">KalpanaAI continuously monitors your Prometheus metrics and Loki error logs. Click <strong>Run Diagnostic Scan</strong> to trigger an immediate AI analysis of the last 30 minutes of telemetry.</p>
-          <div id="anomaly-scan-output" class="anomaly-report-box hidden"></div>
-        </div>
-
-        <div class="card-header" style="padding:0 0 1rem">
-          <h3>Active Anomalies</h3>
-          <button class="btn btn-ghost btn-sm" id="refresh-anomalies-btn">↻ Refresh</button>
-        </div>
-        <div id="anomalies-list" class="anomalies-list">
-          <div class="loading-pulse"></div>
-        </div>
-      </div>
-
-      <!-- Phase 2: Episodic Memory Page -->
-      <div id="page-memory" class="page">
-        <div class="page-header">
-          <h1>Episodic Memory</h1>
-          <div class="header-actions">
-            <span class="badge badge-blue">Long-Term AI Memory</span>
-            <button class="btn btn-ghost" id="refresh-memory-btn">↻ Refresh</button>
-          </div>
-        </div>
-
-        <div class="card glass" style="margin-bottom:1.5rem">
-          <p style="color:var(--text-muted)">KalpanaAI automatically remembers past interactions, agent outputs, and infrastructure events. This memory is used to enrich future AI responses with relevant context from your history.</p>
-        </div>
-
-        <div class="memory-filters" style="display:flex;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap">
-          <button class="btn btn-ghost btn-sm memory-filter active" data-type="">All Types</button>
-          <button class="btn btn-ghost btn-sm memory-filter" data-type="chat_interaction">💬 Chat</button>
-          <button class="btn btn-ghost btn-sm memory-filter" data-type="agent_output">🤖 Agent</button>
-          <button class="btn btn-ghost btn-sm memory-filter" data-type="anomaly">⚠ Anomaly</button>
-          <button class="btn btn-ghost btn-sm memory-filter" data-type="infra_event">🔧 Infra</button>
-        </div>
-
-        <div id="memory-list" class="memory-list">
-          <div class="loading-pulse"></div>
-        </div>
-      </div>
-
-      <!-- Phase 3: Agent Topology Page -->
-      <div id="page-topology" class="page">
-        <div class="page-header">
-          <h1>Agent Topology</h1>
-          <div class="header-actions">
-            <span class="badge badge-purple">Phase 3 · Multi-Agent Mesh</span>
-            <button class="btn btn-ghost" id="refresh-topology-btn">↻ Refresh</button>
-          </div>
-        </div>
-        <div class="p3-grid">
-          <div class="card glass" style="grid-column:span 2">
-            <h3 style="margin-bottom:1rem">Registered Agents</h3>
-            <div id="agents-grid" class="agents-grid"></div>
-          </div>
-          <div class="card glass">
-            <h3 style="margin-bottom:1rem">Quick Orchestrate</h3>
-            <div class="form-group">
-              <label>Goal</label>
-              <textarea id="orch-goal" class="ingest-textarea" rows="3" placeholder="e.g. 'comprehensive analysis' or 'predict scaling needs'"></textarea>
-            </div>
-            <button class="btn btn-primary" id="run-orchestration-btn" style="width:100%;margin-top:.5rem">⚡ Orchestrate</button>
-            <div id="orch-status" style="margin-top:1rem;display:none">
-              <div class="loading-pulse"></div>
-              <p style="text-align:center;margin-top:.5rem;color:var(--text-muted)">Running multi-agent plan...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Phase 3: Orchestrations Page -->
-      <div id="page-orchestrations" class="page">
-        <div class="page-header">
-          <h1>Orchestration Plans</h1>
-          <div class="header-actions">
-            <span class="badge badge-blue">DAG Execution Engine</span>
-            <button class="btn btn-ghost" id="refresh-plans-btn">↻ Refresh</button>
-          </div>
-        </div>
-        <div id="plans-list" class="plans-list"></div>
-      </div>
-
-      <!-- Phase 3: Live Events Page -->
-      <div id="page-events" class="page">
-        <div class="page-header">
-          <h1>Live Event Stream</h1>
-          <div class="header-actions">
-            <span id="sse-status-badge" class="badge badge-green">🟢 Connected</span>
-            <button class="btn btn-ghost" id="clear-events-btn">Clear</button>
-          </div>
-        </div>
-        <div class="card glass" style="margin-bottom:1.5rem;padding:.75rem 1.25rem">
-          <p style="color:var(--text-muted);font-size:.85rem">Real-time event stream from the Orchestrator. All agent heartbeats, task dispatches, and plan completions appear here instantly via Server-Sent Events.</p>
-        </div>
-        <div id="events-feed" class="events-feed"></div>
-      </div>
-
-      <!-- Phase 4: Federation Page -->
-      <div id="page-federation" class="page">
-        <div class="page-header">
-          <h1>Federation & Self-Healing</h1>
-          <div class="header-actions">
-            <button class="btn btn-primary" id="add-peer-btn">+ Trust New Peer</button>
-          </div>
-        </div>
-
-        <div class="federation-grid">
-          <!-- Peers list -->
-          <div class="card glass">
-            <h2>Trusted Peer Nodes</h2>
-            <div class="table-container">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Status</th>
-                    <th>Friendly Name</th>
-                    <th>URL</th>
-                    <th>DID</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="peers-list-tbody">
-                  <!-- Dynamic peers list -->
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Self Healing Audit Log -->
-          <div class="card glass">
-            <h2>Self-Healing Remediation Log</h2>
-            <div class="timeline" id="remediation-audit-log">
-              <!-- Remediation log items -->
-            </div>
-          </div>
-        </div>
-
-        <!-- Capability Registry / Marketplace -->
-        <div class="card glass" style="margin-top:1.5rem">
-          <h2>Federated Agent Marketplace</h2>
-          <p style="color:var(--text-muted);font-size:.85rem;margin-bottom:1rem">Discover agent capabilities advertised by connected peers and request workload delegation.</p>
-          <div class="table-container">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Agent ID</th>
-                  <th>Name</th>
-                  <th>Description</th>
-                  <th>Capabilities</th>
-                  <th>Delegation Route</th>
-                </tr>
-              </thead>
-              <tbody id="federated-marketplace-tbody">
-                <!-- Federated marketplace items -->
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-    </main>
-  </div>
-
-  <!-- Deploy Service Modal -->
-  <div id="deploy-modal" class="modal-overlay hidden">
-    <div class="modal glass">
-      <div class="modal-header">
-        <h3>Deploy Service</h3>
-        <button class="modal-close" id="close-deploy-modal">✕</button>
-      </div>
-      <form id="deploy-form" class="modal-form">
+      <form id="auth-form">
         <div class="form-group">
-          <label>Service Name</label>
-          <input type="text" id="deploy-name" class="input-field" placeholder="my-service" required />
+          <label for="modal-email">Admin Email</label>
+          <input type="email" id="modal-email" class="input-field" placeholder="admin@domain.local" required autocomplete="email" />
         </div>
         <div class="form-group">
-          <label>Docker Image</label>
-          <input type="text" id="deploy-image" class="input-field" placeholder="nginx:alpine" required />
+          <label for="modal-password">Password</label>
+          <input type="password" id="modal-password" class="input-field" placeholder="••••••••" required autocomplete="current-password" minlength="8" />
         </div>
-        <div class="form-group">
-          <label>Port Mapping (host:container)</label>
-          <input type="text" id="deploy-ports" class="input-field" placeholder="8080:80" />
-        </div>
-        <div class="form-group">
-          <label>Environment Variables (KEY=VALUE, one per line)</label>
-          <textarea id="deploy-env" class="ingest-textarea" rows="3" placeholder="API_KEY=abc&#10;DEBUG=true"></textarea>
-        </div>
-        <div class="form-group">
-          <label>Memory Limit</label>
-          <input type="text" id="deploy-mem" class="input-field" placeholder="128m" value="128m" />
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="btn btn-ghost" id="cancel-deploy">Cancel</button>
-          <button type="submit" class="btn btn-primary">Deploy</button>
-        </div>
+        <button type="submit" class="btn btn-primary btn-full modal-btn" id="modal-submit-btn">Register & Download</button>
       </form>
     </div>
   </div>
 
-  <!-- Trust Peer Modal -->
-  <div id="peer-modal" class="modal-overlay hidden">
-    <div class="modal glass">
-      <div class="modal-header">
-        <h3>Trust New Peer Node</h3>
-        <button class="modal-close" id="close-peer-modal">✕</button>
-      </div>
-      <form id="peer-form" class="modal-form">
-        <div class="form-group">
-          <label>Friendly Name</label>
-          <input type="text" id="peer-name" class="input-field" placeholder="My Edge Node" required />
-        </div>
-        <div class="form-group">
-          <label>Peer DID (did:key:...)</label>
-          <input type="text" id="peer-did" class="input-field" placeholder="did:key:z6M..." required />
-        </div>
-        <div class="form-group">
-          <label>Endpoint URL (Orchestrator Host)</label>
-          <input type="text" id="peer-url" class="input-field" placeholder="http://192.168.1.10:8006" required />
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="btn btn-ghost" id="cancel-peer">Cancel</button>
-          <button type="submit" class="btn btn-primary">Trust Peer</button>
-        </div>
-      </form>
-    </div>
-  </div>
+  <script>
+    // Constants
+    const STORAGE_KEY = 'kalpana_token';
+    const REFRESH_KEY = 'kalpana_refresh';
 
-  <!-- Toast Notifications -->
-  <div id="toast-container" class="toast-container"></div>
+    // State
+    let pendingDownloadFile = null;
+    let authMode = 'register'; // 'register' or 'login'
 
-  <script src="app.js"></script>
+    // DOM Elements
+    const authModal = document.getElementById('auth-modal');
+    const modalCloseBtn = document.getElementById('modal-close-btn');
+    const modalTitleText = document.getElementById('modal-title-text');
+    const modalSubmitBtn = document.getElementById('modal-submit-btn');
+    const modalError = document.getElementById('modal-error');
+    const authForm = document.getElementById('auth-form');
+    const modalEmail = document.getElementById('modal-email');
+    const modalPassword = document.getElementById('modal-password');
+    const tabRegister = document.getElementById('tab-register');
+    const tabLogin = document.getElementById('tab-login');
+    const downloadTriggers = document.querySelectorAll('.download-trigger');
+
+    // Tab Switching
+    tabRegister.addEventListener('click', () => setAuthMode('register'));
+    tabLogin.addEventListener('click', () => setAuthMode('login'));
+
+    function setAuthMode(mode) {
+      authMode = mode;
+      modalError.style.display = 'none';
+      if (mode === 'register') {
+        tabRegister.classList.add('active');
+        tabLogin.classList.remove('active');
+        modalTitleText.textContent = 'Register OS Account';
+        modalSubmitBtn.textContent = 'Register & Download';
+      } else {
+        tabRegister.classList.remove('active');
+        tabLogin.classList.add('active');
+        modalTitleText.textContent = 'Log In to OS';
+        modalSubmitBtn.textContent = 'Log In & Download';
+      }
+    }
+
+    // Modal Controls
+    modalCloseBtn.addEventListener('click', () => {
+      authModal.classList.remove('active');
+      pendingDownloadFile = null;
+    });
+
+    // Check auth before triggering download
+    downloadTriggers.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const file = btn.getAttribute('data-file');
+        const token = localStorage.getItem(STORAGE_KEY);
+        
+        if (token) {
+          // User already logged in, trigger download immediately
+          triggerDownload(file);
+        } else {
+          // Show registration modal
+          pendingDownloadFile = file;
+          setAuthMode('register');
+          authModal.classList.add('active');
+        }
+      });
+    });
+
+    // Handle Auth Submit
+    authForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      modalError.style.display = 'none';
+      modalSubmitBtn.disabled = true;
+
+      const email = modalEmail.value.trim();
+      const password = modalPassword.value;
+      const endpoint = authMode === 'register' ? '/api/sil/auth/register' : '/api/sil/auth/login';
+
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+          throw new Error(data.error || 'Authentication failed');
+        }
+
+        // Save tokens
+        localStorage.setItem(STORAGE_KEY, data.access_token);
+        localStorage.setItem(REFRESH_KEY, data.refresh_token);
+
+        // Close modal
+        authModal.classList.remove('active');
+        
+        // Trigger download
+        if (pendingDownloadFile) {
+          triggerDownload(pendingDownloadFile);
+          pendingDownloadFile = null;
+        }
+      } catch (err) {
+        modalError.textContent = err.message;
+        modalError.style.display = 'block';
+      } finally {
+        modalSubmitBtn.disabled = false;
+      }
+    });
+
+    // Trigger File Download
+    async function triggerDownload(file) {
+      if (file === 'install.sh') {
+        try {
+          // Dynamic installation script helper
+          const res = await fetch('/install.sh');
+          if (!res.ok) throw new Error('Could not retrieve install script');
+          let script = await res.text();
+          
+          // Inject current gateway URL
+          script = script.replace('{{GATEWAY_URL}}', window.location.origin);
+          
+          const blob = new Blob([script], { type: 'text/x-shellscript' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'install.sh';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch (e) {
+          alert('Download error: ' + e.message);
+        }
+      } else if (file === 'kalpana') {
+        // Download CLI binary
+        const a = document.createElement('a');
+        a.href = '/kalpana';
+        a.download = 'kalpana';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    }
+
+    // Auto-update Launch Console button state
+    function updateConsoleButtons() {
+      const token = localStorage.getItem(STORAGE_KEY);
+      const launchBtn = document.getElementById('launch-console-btn');
+      const heroBtn = document.getElementById('hero-console-btn');
+      
+      if (token) {
+        launchBtn.textContent = 'Go to Console';
+        heroBtn.textContent = 'Launch Console';
+      } else {
+        launchBtn.textContent = 'Sign In';
+        heroBtn.textContent = 'Console Login';
+      }
+    }
+
+    window.addEventListener('load', updateConsoleButtons);
+  </script>
 </body>
 </html>

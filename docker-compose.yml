@@ -26,6 +26,8 @@ volumes:
   pge-data:
   ikg-data:
   fdcl-data:
+  redpanda-data:
+  minio-data:
 
 services:
 
@@ -311,6 +313,35 @@ services:
       - aicp
       - orchestrator
 
+  tunnel:
+    image: alpine:3.18
+    container_name: kalpana-tunnel
+    networks: [kalpana-net]
+    restart: always
+    depends_on:
+      - ui
+    entrypoint: >
+      /bin/sh -c "
+      apk add --no-cache openssh-client &&
+      while true; do
+        echo 'Starting tunnel connection...' &&
+        ssh -T -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -R 80:ui:80 nokey@localhost.run > /tmp/ssh.log 2>&1 &
+        SSH_PID=$$!
+        sleep 4
+        URL=$$(grep -oE 'https://[a-zA-Z0-9.-]+\.lhr\.life' /tmp/ssh.log | head -n 1)
+        echo ''
+        echo '==================================================='
+        echo '   KALPANA OS PUBLIC TUNNEL STARTED'
+        echo '   Your public domain is:'
+        echo '   ' $$URL
+        echo '==================================================='
+        echo ''
+        wait $$SSH_PID || true
+        sleep 5
+      done
+      "
+
+
   # ── Observability ───────────────────────────────────────────
 
   prometheus:
@@ -505,3 +536,90 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.3.6
+    container_name: kalpana-redpanda
+    networks: [kalpana-net]
+    command: >
+      redpanda start
+      --overprovisioned
+      --smp=1
+      --memory=160M
+      --reserve-memory=0M
+      --default-log-level=warn
+      --kafka-addr=PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      --advertise-kafka-addr=PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9092
+      --mode dev-container
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    ports:
+      - "9092:9092"
+    mem_limit: 220m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: kalpana-minio
+    networks: [kalpana-net]
+    volumes:
+      - minio-data:/data
+    environment:
+      MINIO_ROOT_USER: kalpana-admin
+      MINIO_ROOT_PASSWORD: kalpana-secret-2026
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    mem_limit: 80m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  cbal:
+    build:
+      context: ./services/cbal
+      dockerfile: Dockerfile
+    container_name: kalpana-cbal
+    networks: [kalpana-net]
+    volumes:
+      - ./deploy/certs:/certs:ro
+    environment:
+      PORT: "8010"
+      DB_PATH: /data/cbal.db
+      NATS_URL: nats://nats:4222
+      REDPANDA_BROKERS: redpanda:29092
+      MINIO_URL: http://minio:9000
+      MINIO_ROOT_USER: kalpana-admin
+      MINIO_ROOT_PASSWORD: kalpana-secret-2026
+      SIL_URL: http://sil:8001
+      IKG_URL: http://ikg:8008
+      AICP_URL: http://aicp:8004
+      PGE_URL: http://pge:8007
+    ports:
+      - "8010:8010"
+    mem_limit: 150m
+    restart: unless-stopped
+    depends_on:
+      sil:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8010/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
