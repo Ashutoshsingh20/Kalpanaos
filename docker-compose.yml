@@ -320,25 +320,31 @@ services:
     restart: always
     depends_on:
       - ui
-    entrypoint: >
-      /bin/sh -c "
-      apk add --no-cache openssh-client &&
-      touch /tmp/ssh.log &&
-      tail -f /tmp/ssh.log | grep -oE '[a-zA-Z0-9.-]+\.lhr\.life' | while read -r URL; do
-        echo ''
-        echo '==================================================='
-        echo '   KALPANA OS PUBLIC TUNNEL ACTIVE'
-        echo '   Your public domain is:'
-        echo '   https://'$$URL
-        echo '==================================================='
-        echo ''
-      done &
-      while true; do
-        echo 'Starting tunnel connection...'
-        ssh -T -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -R 80:ui:80 nokey@localhost.run > /tmp/ssh.log 2>&1
-        sleep 5
-      done
-      "
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        apk add --no-cache openssh-client &&
+        touch /tmp/ssh.log &&
+        while true; do
+          URL=$$(grep -oE '[a-zA-Z0-9.-]+\.lhr\.life' /tmp/ssh.log | tail -n 1)
+          if [ -n "$$URL" ] && [ "$$URL" != "$$LAST_URL" ]; then
+            echo ''
+            echo '==================================================='
+            echo '   KALPANA OS PUBLIC TUNNEL ACTIVE'
+            echo '   Your public domain is:'
+            echo '   https://'$$URL
+            echo '==================================================='
+            echo ''
+            LAST_URL=$$URL
+          fi
+          sleep 2
+        done &
+        while true; do
+          echo 'Starting tunnel connection...'
+          ssh -T -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -R 80:ui:80 nokey@localhost.run > /tmp/ssh.log 2>&1
+          sleep 5
+        done
 
 
   # ── Observability ───────────────────────────────────────────
