@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -21,8 +22,35 @@ func (d *Daemon) handlePOSTWorkload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 1. Cognitive Convergence oscillation check
+	allowed, cooldown := d.ccf.RegisterStateTransition(spec.ID, "running")
+	if !allowed {
+		jsonError(w, fmt.Sprintf("request blocked by Cognitive Convergence Framework. Active oscillation damping in progress. Cooldown: %v", cooldown), http.StatusTooManyRequests)
+		return
+	}
+
+	// 2. Sovereign Arbitration precedence check
+	intent := CognitiveIntent{
+		ID:         fmt.Sprintf("int-%d", time.Now().UnixNano()),
+		Domain:     DomainCoordination, // Scheduling requests fall in Coordination Domain
+		WorkloadID: spec.ID,
+		Action:     "deploy",
+		Payload:    spec,
+		Timestamp:  time.Now(),
+	}
+	authorized, reason := d.sal.Arbitrate(intent)
+	if !authorized {
+		// Clean ccf entry since it was rejected
+		d.ccf.Clear(spec.ID)
+		jsonError(w, fmt.Sprintf("request blocked by Sovereign Arbitration Layer: %s", reason), http.StatusConflict)
+		return
+	}
+
 	cID, err := d.ScheduleWorkload(r.Context(), spec)
 	if err != nil {
+		// Clean active intents and ccf on failure
+		d.sal.Clear(spec.ID)
+		d.ccf.Clear(spec.ID)
 		jsonError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -118,7 +146,7 @@ func (d *Daemon) handleGETIntentLineage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	nodes, edges, err := d.ige.GetCausalLineage(workloadID)
+	nodes, edges, err := d.bgte.BoundedCausalLineage(workloadID)
 	if err != nil {
 		jsonError(w, "failed to query causality lineage: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -129,6 +157,21 @@ func (d *Daemon) handleGETIntentLineage(w http.ResponseWriter, r *http.Request) 
 		"nodes":       nodes,
 		"edges":       edges,
 	})
+}
+
+// handleGETLoopStats queries ALIS registered loop statuses
+func (d *Daemon) handleGETLoopStats(w http.ResponseWriter, r *http.Request) {
+	d.alis.mu.Lock()
+	stats := make(map[string]interface{})
+	for k, v := range d.alis.registered {
+		stats[k] = map[string]interface{}{
+			"interval_ms":      v.Interval.Milliseconds(),
+			"last_executed":    v.LastExecution.Format(time.RFC3339),
+			"last_duration_ms": v.Duration.Milliseconds(),
+		}
+	}
+	d.alis.mu.Unlock()
+	jsonOK(w, stats)
 }
 
 // handlePOSTQuotaValidate checks and registers agent execution quotas

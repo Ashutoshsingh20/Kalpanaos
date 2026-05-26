@@ -11,7 +11,12 @@ import (
 
 // StartControlLoops starts the background workers for the cognitive runtime
 func (d *Daemon) StartControlLoops(ctx context.Context) {
-	log.Printf("[SIRL] Initializing autonomous background control loops (HCD-aligned)...")
+	log.Printf("[SIRL] Initializing autonomous background control loops (HCD-aligned with ALIS)...")
+
+	// Register loops with ALIS
+	d.alis.RegisterLoop("telemetry_gossip", 5*time.Second)
+	d.alis.RegisterLoop("reconciliation", 15*time.Second)
+	d.alis.RegisterLoop("drift_regression", 30*time.Second)
 
 	// 1. Telemetry and Gossip Loop (Every 5 seconds)
 	go func() {
@@ -21,11 +26,15 @@ func (d *Daemon) StartControlLoops(ctx context.Context) {
 		for {
 			select {
 			case <-ticker.C:
-				d.GatherHostTelemetry()
-				gossipCounter++
-				if gossipCounter >= 2 { // Every 10s
-					d.GossipCapabilities()
-					gossipCounter = 0
+				if d.alis.CanExecute("telemetry_gossip") {
+					start := time.Now()
+					d.GatherHostTelemetry()
+					gossipCounter++
+					if gossipCounter >= 2 { // Every 10s
+						d.GossipCapabilities()
+						gossipCounter = 0
+					}
+					d.alis.RecordExecution("telemetry_gossip", time.Since(start))
 				}
 			case <-ctx.Done():
 				return
@@ -40,7 +49,11 @@ func (d *Daemon) StartControlLoops(ctx context.Context) {
 		for {
 			select {
 			case <-ticker.C:
-				d.ReconcileWorkloadStates(ctx)
+				if d.alis.CanExecute("reconciliation") {
+					start := time.Now()
+					d.ReconcileWorkloadStates(ctx)
+					d.alis.RecordExecution("reconciliation", time.Since(start))
+				}
 			case <-ctx.Done():
 				return
 			}
@@ -55,12 +68,36 @@ func (d *Daemon) StartControlLoops(ctx context.Context) {
 		for {
 			select {
 			case <-ticker.C:
-				d.ForecastDrift()
-				compactionCounter++
-				if compactionCounter >= 20 { // Every 10 minutes
-					log.Printf("[SIRL] Initiating cache and graph compaction checks...")
-					d.ige.PurgeOldLineage()
-					compactionCounter = 0
+				if d.alis.CanExecute("drift_regression") {
+					start := time.Now()
+					d.ForecastDrift()
+					
+					// Compute temporal drift and publish SRDM metrics
+					drift := d.itse.CalculateBehavioralDrift()
+					
+					var maxOsc int
+					d.ccf.mu.RLock()
+					for _, times := range d.ccf.stateChanges {
+						if len(times) > maxOsc {
+							maxOsc = len(times)
+						}
+					}
+					d.ccf.mu.RUnlock()
+					
+					d.srdm.RecordStabilityMetrics(drift, float64(maxOsc))
+
+					compactionCounter++
+					if compactionCounter >= 20 { // Every 10 minutes
+						log.Printf("[SIRL] Initiating cache and graph compaction checks...")
+						d.alis.RegisterLoop("compaction", 10*time.Minute)
+						if d.alis.CanExecute("compaction") {
+							compactionStart := time.Now()
+							d.ige.PurgeOldLineage()
+							d.alis.RecordExecution("compaction", time.Since(compactionStart))
+						}
+						compactionCounter = 0
+					}
+					d.alis.RecordExecution("drift_regression", time.Since(start))
 				}
 			case <-ctx.Done():
 				return

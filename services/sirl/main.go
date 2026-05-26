@@ -83,6 +83,16 @@ type Daemon struct {
 	sandbox *AutonomousGovernanceSandbox
 	esgl    *EventSaturationGovernance
 
+	// DCCL Substrate
+	sal   *SovereignArbitrationLayer
+	dece  *DeterministicEventCoordinationEngine
+	ccf   *CognitiveConvergenceFramework
+	fccl  *FederatedCognitionConsistencyLayer
+	itse  *InfrastructureTemporalStabilityEngine
+	bgte  *BoundedGraphTraversalEngine
+	alis  *AutonomousLoopIntegritySystem
+	srdm  *SovereignRuntimeDeterminismMetrics
+
 	// Cache
 	graph    *DependencyGraph
 	mu       sync.RWMutex
@@ -133,6 +143,21 @@ func main() {
 	// Initialize ESGL
 	d.esgl = NewEventSaturationGovernance(d.nc, cfg.NodeID)
 	defer d.esgl.Close()
+
+	// Initialize DCCL Substrate
+	d.sal = NewSovereignArbitrationLayer(storage)
+	d.dece = NewDeterministicEventCoordinationEngine(d.nc, cfg.NodeID)
+	defer d.dece.Close()
+	d.ccf = NewCognitiveConvergenceFramework(storage)
+	d.fccl = NewFederatedCognitionConsistencyLayer(d.nc, cfg.NodeID, storage)
+	defer d.fccl.Close()
+	d.itse = NewInfrastructureTemporalStabilityEngine(storage)
+	d.bgte = NewBoundedGraphTraversalEngine(storage)
+	d.alis = NewAutonomousLoopIntegritySystem()
+	d.srdm = NewSovereignRuntimeDeterminismMetrics(storage)
+
+	// Start federated reconciliation
+	d.fccl.Start()
 
 	// Start Background Cognitive Loops
 	ctx, cancel := context.WithCancel(context.Background())
@@ -269,6 +294,7 @@ func (d *Daemon) setupRouter() *chi.Mux {
 	// Harden verification API
 	r.Get("/api/sirl/intent/lineage/{id}", d.handleGETIntentLineage)
 	r.Post("/api/sirl/governance/quota/validate", d.handlePOSTQuotaValidate)
+	r.Get("/api/sirl/loop/stats", d.handleGETLoopStats)
 
 	return r
 }
