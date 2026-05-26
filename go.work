@@ -11,5 +11,6 @@ use (
 	./services/ikg
 	./services/fdcl
 	./services/cbal
+	./services/sirl
 	./cli
 )

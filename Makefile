@@ -34,7 +34,7 @@ restart: ## Restart all services
 	$(COMPOSE) restart
 
 rebuild: ## Rebuild all Go service images and restart
-	$(COMPOSE) build --no-cache sil col ssi aicp aaf ui
+	$(COMPOSE) build --no-cache sil col ssi aicp aaf sirl ui
 	$(COMPOSE) up -d
 
 logs: ## Follow logs from all services
@@ -53,7 +53,7 @@ clean: ## Remove all containers, volumes, and images
 # ─── Go module tasks ───────────────────────────────────────────
 
 tidy: ## Run go mod tidy on all services
-	@for svc in sil col ssi aicp aaf; do \
+	@for svc in sil col ssi aicp aaf sirl; do \
 		echo "→ Tidying services/$$svc"; \
 		cd services/$$svc && go mod tidy; cd ../..; \
 	done
@@ -69,8 +69,8 @@ build-cli: ## Build the kalpana CLI binary
 
 health: ## Check health of all services
 	@echo "Checking service health…"
-	@for port in 8001 8002 8003 8004 8005; do \
-		name=$$([ $$port -eq 8001 ] && echo "SIL" || [ $$port -eq 8002 ] && echo "COL" || [ $$port -eq 8003 ] && echo "SSI" || [ $$port -eq 8004 ] && echo "AICP" || echo "AAF"); \
+	@for port in 8001 8002 8003 8004 8005 8011; do \
+		name=$$([ $$port -eq 8001 ] && echo "SIL" || [ $$port -eq 8002 ] && echo "COL" || [ $$port -eq 8003 ] && echo "SSI" || [ $$port -eq 8004 ] && echo "AICP" || [ $$port -eq 8005 ] && echo "AAF" || echo "SIRL"); \
 		result=$$(curl -sf http://localhost:$$port/health 2>/dev/null && echo "✓" || echo "✕"); \
 		echo "  $$result $$name (port $$port)"; \
 	done

@@ -28,6 +28,7 @@ volumes:
   fdcl-data:
   redpanda-data:
   minio-data:
+  sirl-data:
 
 services:
 
@@ -653,4 +654,41 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+
+  sirl:
+    build:
+      context: ./services/sirl
+      dockerfile: Dockerfile
+    container_name: kalpana-sirl
+    user: "root"
+    networks: [kalpana-net]
+    volumes:
+      - sirl-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./deploy/certs:/certs:ro
+    environment:
+      PORT: "8011"
+      DB_PATH: /data/sirl.db
+      SIL_URL: http://sil:8001
+      PGE_URL: http://pge:8007
+      IKG_URL: http://ikg:8008
+      SSI_URL: http://ssi:8003
+      CBAL_URL: http://cbal:8010
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      CERT_FILE: /certs/sirl/server.crt
+      KEY_FILE: /certs/sirl/server.key
+      CA_FILE: /certs/ca.crt
+      NODE_ID: ${NODE_ID:-edge-node-01}
+    ports:
+      - "8011:8011"
+    mem_limit: 80m
+    restart: unless-stopped
+    depends_on:
+      sil:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      pge:
+        condition: service_healthy
+
 

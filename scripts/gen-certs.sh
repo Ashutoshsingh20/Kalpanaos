@@ -8,7 +8,7 @@
 set -euo pipefail
 
 CERTS_DIR="deploy/certs"
-SERVICES=("sil" "col" "ssi" "aicp" "aaf" "orchestrator")
+SERVICES=("sil" "col" "ssi" "aicp" "aaf" "orchestrator" "sirl")
 DAYS_CA=3650
 DAYS_SVC=365
 
