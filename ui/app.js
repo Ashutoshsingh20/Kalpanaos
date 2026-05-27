@@ -174,6 +174,7 @@ function navigateTo(page) {
     case 'observe':   loadObservability(); break;
     case 'chat':      
       loadLiveCognitionMap();
+      loadChatHistory();
       loadCoordination().then(() => updateDCCLGaugesInArtifact());
       break;
     // Phase 2
@@ -2378,4 +2379,52 @@ window.initArtifactTabs = initArtifactTabs;
 window.loadLiveCognitionMap = loadLiveCognitionMap;
 window.startADELTracker = startADELTracker;
 window.updateDCCLGaugesInArtifact = updateDCCLGaugesInArtifact;
+
+async function loadChatHistory() {
+  const container = $('chat-messages');
+  if (!container) return;
+
+  if (!state.sessionId) {
+    const sessions = await api('AICP', '/sessions');
+    if (sessions && sessions.length > 0) {
+      sessions.sort((a, b) => b.id.localeCompare(a.id));
+      state.sessionId = sessions[0].id;
+    }
+  }
+
+  if (state.sessionId) {
+    const messages = await api('AICP', `/sessions/${state.sessionId}/history`);
+    if (messages && messages.length > 0) {
+      container.innerHTML = '';
+      let lastDeployParams = null;
+      messages.forEach(msg => {
+        appendMessage(msg.role, msg.content);
+        
+        if (msg.role === 'assistant' && msg.content) {
+          const actRegex = /\[ACTION:\s*deploy_app\s*\|\s*([^\]]+)\]/i;
+          const match = msg.content.match(actRegex);
+          if (match) {
+            const inner = match[1];
+            const params = {};
+            inner.split(' ').forEach(part => {
+              const kv = part.split('=');
+              if (kv.length === 2) {
+                params[kv[0].trim()] = kv[1].trim();
+              }
+            });
+            if (params.name && (params.repo || params.git_repo)) {
+              lastDeployParams = params;
+            }
+          }
+        }
+      });
+
+      if (lastDeployParams) {
+        startADELTracker(lastDeployParams);
+      }
+    }
+  }
+}
+
+window.loadChatHistory = loadChatHistory;
 
