@@ -275,9 +275,352 @@ body {
 .audit-table tr:hover td { background: rgba(0,0,0,0.01); }
 .empty-row { text-align: center; color: var(--text-muted); padding: 24px !important; }
 
-/* ─── Chat ───────────────────────────────────────────────────── */
-.chat-layout { height: calc(100vh - 160px); display: flex; flex-direction: column; }
-.chat-container { border-radius: var(--radius); display: flex; flex-direction: column; height: 100%; overflow: hidden; border: 1px solid var(--border); background: var(--bg-surface); }
+/* ─── Chat Split Layout ───────────────────────────────────────── */
+.chat-layout { 
+  height: calc(100vh - 160px); 
+  display: flex; 
+  gap: 20px; 
+  align-items: stretch;
+}
+.chat-container { 
+  flex: 3; 
+  border-radius: var(--radius); 
+  display: flex; 
+  flex-direction: column; 
+  height: 100%; 
+  overflow: hidden; 
+  border: 1px solid var(--border); 
+  background: var(--bg-surface); 
+}
+
+.artifact-container {
+  flex: 2;
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+.artifact-tabs {
+  display: flex;
+  background: rgba(0, 0, 0, 0.02);
+  border-bottom: 1px solid var(--border);
+  padding: 4px;
+  gap: 2px;
+}
+
+.artifact-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 10px 4px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+  font-family: 'Inter', sans-serif;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.artifact-tab:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-primary);
+}
+
+.artifact-tab.active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.artifact-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.artifact-panel {
+  display: none;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+}
+
+.artifact-panel.active {
+  display: flex;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panel-header h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.panel-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-top: -8px;
+}
+
+/* ─── Topology Canvas ────────────────────────────────────────── */
+.topology-canvas {
+  flex: 1;
+  border: 1px dashed var(--border-bright);
+  border-radius: var(--radius);
+  background: rgba(0, 0, 0, 0.01);
+  min-height: 200px;
+  padding: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-content: flex-start;
+  overflow-y: auto;
+}
+
+.topo-node {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-family: 'JetBrains Mono', monospace;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.topo-node:hover {
+  border-color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.topo-node.active-node {
+  border-color: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.pulse-dot.green {
+  background: var(--green);
+  box-shadow: 0 0 8px rgba(22, 163, 74, 0.6);
+  animation: pulse-glow 2s infinite;
+}
+
+.pulse-dot.orange {
+  background: var(--amber);
+  box-shadow: 0 0 8px rgba(217, 119, 6, 0.6);
+}
+
+.pulse-dot.red {
+  background: var(--red);
+  box-shadow: 0 0 8px rgba(220, 38, 38, 0.6);
+}
+
+@keyframes pulse-glow {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.7; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.selected-node-details {
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.node-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.node-card-name {
+  font-weight: 700;
+  font-size: 0.85rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.node-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.node-info-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+}
+
+.node-info-item span:first-child {
+  color: var(--text-muted);
+}
+
+.node-info-item span:last-child {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ─── Deployment Pipeline Panel ──────────────────────────────── */
+.dep-meta-info {
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.75rem;
+}
+
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.meta-row span:first-child {
+  color: var(--text-muted);
+}
+
+.meta-row span:last-child {
+  font-weight: 600;
+}
+
+.pipeline-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 8px 0;
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  opacity: 0.4;
+  transition: opacity 0.3s ease;
+}
+
+.step-item.active {
+  opacity: 1;
+}
+
+.step-item.done {
+  opacity: 0.8;
+}
+
+.step-item.done .step-marker {
+  background: var(--green);
+  color: #ffffff;
+}
+
+.step-marker {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--border-bright);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.step-item.active .step-marker {
+  background: var(--accent);
+  color: #ffffff;
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.step-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.dep-terminal-wrap {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: #09090b;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.terminal-header {
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 12px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.dep-terminal {
+  padding: 12px;
+  color: #22c55e;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ─── DCCL Gauges ────────────────────────────────────────────── */
+.gauge-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.gauge-box {
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.gauge-val {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.gauge-lbl {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
 .chat-messages { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
 .chat-messages::-webkit-scrollbar { width: 4px; }
 .chat-messages::-webkit-scrollbar-track { background: transparent; }

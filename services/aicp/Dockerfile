@@ -36,8 +36,8 @@ RUN apk add --no-cache ca-certificates tzdata && \
 RUN addgroup -S aicp && adduser -S -G aicp aicp
 
 # Persistent state directory
+RUN mkdir -p /data && chown -R aicp:aicp /data
 VOLUME ["/data"]
-RUN mkdir -p /data && chown aicp:aicp /data
 
 # Copy binary from builder
 COPY --from=builder /aicp /usr/local/bin/aicp

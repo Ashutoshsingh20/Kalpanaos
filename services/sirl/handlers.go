@@ -215,3 +215,73 @@ func jsonOK(w http.ResponseWriter, data interface{}) {
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(data)
 }
+
+// handleGETCCFDamping returns list of active and historical oscillation dampings
+func (d *Daemon) handleGETCCFDamping(w http.ResponseWriter, r *http.Request) {
+	rows, err := d.storage.CognitionDB.QueryContext(r.Context(), `
+		SELECT workload_id, exit_code, outcome, timestamp FROM recovery_log
+		WHERE action = 'OSCILLATION_DAMPING' ORDER BY timestamp DESC LIMIT 20
+	`)
+
+	type DampingRecord struct {
+		WorkloadID string    `json:"workload_id"`
+		Count      int       `json:"count"`
+		Outcome    string    `json:"outcome"`
+		Timestamp  time.Time `json:"timestamp"`
+		Active     bool      `json:"active"`
+		Cooldown   string    `json:"cooldown"`
+	}
+
+	var records []DampingRecord
+	now := time.Now()
+
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var rec DampingRecord
+			if err := rows.Scan(&rec.WorkloadID, &rec.Count, &rec.Outcome, &rec.Timestamp); err == nil {
+				d.ccf.mu.RLock()
+				until, damped := d.ccf.dampingEnd[rec.WorkloadID]
+				d.ccf.mu.RUnlock()
+
+				if damped && now.Before(until) {
+					rec.Active = true
+					rec.Cooldown = until.Sub(now).Round(time.Second).String()
+				} else {
+					rec.Active = false
+					rec.Cooldown = "expired"
+				}
+				records = append(records, rec)
+			}
+		}
+	}
+
+	// Also append currently active in memory that might not be in DB yet
+	d.ccf.mu.RLock()
+	for wID, until := range d.ccf.dampingEnd {
+		if now.Before(until) {
+			// check if already added
+			alreadyAdded := false
+			for _, r := range records {
+				if r.WorkloadID == wID && r.Active {
+					alreadyAdded = true
+					break
+				}
+			}
+			if !alreadyAdded {
+				records = append(records, DampingRecord{
+					WorkloadID: wID,
+					Count:      3,
+					Outcome:    "damped",
+					Timestamp:  until.Add(-5 * time.Minute), // approximate
+					Active:     true,
+					Cooldown:   until.Sub(now).Round(time.Second).String(),
+				})
+			}
+		}
+	}
+	d.ccf.mu.RUnlock()
+
+	jsonOK(w, records)
+}
+

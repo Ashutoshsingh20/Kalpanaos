@@ -12,6 +12,7 @@ const API = {
   AAF:  '/api/aaf',
   ORCH: '/api/orchestrator',
   CBAL: '/api/cbal',
+  SIRL: '/api/sirl',
 };
 
 // ─── State ───────────────────────────────────────────────────
@@ -171,7 +172,10 @@ function navigateTo(page) {
     case 'agents':    loadAgents(); loadTasks(); break;
     case 'search':    break;
     case 'observe':   loadObservability(); break;
-    case 'chat':      break;
+    case 'chat':      
+      loadLiveCognitionMap();
+      loadCoordination().then(() => updateDCCLGaugesInArtifact());
+      break;
     // Phase 2
     case 'anomalies': loadAnomalies(); break;
     case 'memory':    loadMemory(''); break;
@@ -179,6 +183,8 @@ function navigateTo(page) {
     case 'topology':  loadTopologyAgents(); break;
     // Phase 6
     case 'analytics': loadAnalytics(); break;
+    // Phase 7
+    case 'coordination': loadCoordination(); break;
     // App Compiler
     case 'apps':      loadAppsPage(); break;
   }
@@ -496,6 +502,25 @@ async function sendChat() {
   state.sessionId = data.session_id;
   appendMessage('assistant', data.reply || 'No response');
 
+  // Parse for deploy_app command to trigger visual pipeline tracker in SCIL
+  if (data.reply) {
+    const actRegex = /\[ACTION:\s*deploy_app\s*\|\s*([^\]]+)\]/i;
+    const match = data.reply.match(actRegex);
+    if (match) {
+      const inner = match[1];
+      const params = {};
+      inner.split(' ').forEach(part => {
+        const kv = part.split('=');
+        if (kv.length === 2) {
+          params[kv[0].trim()] = kv[1].trim();
+        }
+      });
+      if (params.name && (params.repo || params.git_repo)) {
+        startADELTracker(params);
+      }
+    }
+  }
+
   // Handle pending confirmation
   if (data.pending_command) {
     state.currentPendingCmd = data.pending_command;
@@ -597,6 +622,10 @@ function startAutoRefresh() {
     if (activePage.id === 'page-topology') loadTopologyAgents();
     if (activePage.id === 'page-analytics') loadAnalytics();
     if (activePage.id === 'page-apps') loadAppsPage();
+    if (activePage.id === 'page-chat') {
+      loadLiveCognitionMap();
+      loadCoordination().then(() => updateDCCLGaugesInArtifact());
+    }
   }, 15000);
 }
 
@@ -760,6 +789,7 @@ async function deleteMemory(id) {
 
 // ─── Event Listeners ──────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+  initArtifactTabs();
   // Try auto-login
   const ok = await tryAutoLogin();
   if (ok) {
@@ -986,6 +1016,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('app-modal')?.addEventListener('click', e => {
     if (e.target === $('app-modal')) $('app-modal').classList.add('hidden');
   });
+
+  // Phase 7: Sovereign DCCL
+  $('refresh-coordination-btn')?.addEventListener('click', loadCoordination);
+  $('btn-trace-lineage')?.addEventListener('click', traceCausalLineage);
+  $('lineage-workload-id')?.addEventListener('keydown', e => { if (e.key === 'Enter') traceCausalLineage(); });
+
+  // SCIL: Init Artifact Tabs
+  initArtifactTabs();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1809,3 +1847,535 @@ window.switchImportTab = function(tab) {
   const msgEl = $('import-status-msg');
   if (msgEl) msgEl.classList.add('hidden');
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 7: Sovereign DCCL & Hardening Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function loadCoordination() {
+  const container = $('page-coordination');
+  if (!container) return;
+
+  // 1. Load Prometheus Metrics
+  try {
+    const res = await fetch(`${API.SIRL}/metrics`, {
+      headers: state.token ? { 'Authorization': `Bearer ${state.token}` } : {}
+    });
+    if (res.status === 401) { logout(); return; }
+    if (res.ok) {
+      const text = await res.text();
+      const csi = parsePrometheusMetrics(text, 'sirl_cognitive_stability_index');
+      const acs = parsePrometheusMetrics(text, 'sirl_autonomous_convergence_score');
+      const gis = parsePrometheusMetrics(text, 'sirl_governance_integrity_score');
+      const rsr = parsePrometheusMetrics(text, 'sirl_recovery_stability_ratio');
+
+      $('sirl-metric-csi').textContent = csi.toFixed(2);
+      $('sirl-metric-acs').textContent = acs.toFixed(2);
+      $('sirl-metric-gis').textContent = gis.toFixed(2);
+      $('sirl-metric-rsr').textContent = rsr.toFixed(2);
+
+      // Trend highlights
+      const csiTrend = $('sirl-trend-csi');
+      if (csiTrend) {
+        if (csi > 0.85) {
+          csiTrend.textContent = 'Stable';
+          csiTrend.className = 'stat-trend up';
+        } else {
+          csiTrend.textContent = 'Drifting';
+          csiTrend.className = 'stat-trend neutral';
+        }
+      }
+
+      const acsTrend = $('sirl-trend-acs');
+      if (acsTrend) {
+        if (acs > 0.85) {
+          acsTrend.textContent = 'Active';
+          acsTrend.className = 'stat-trend up';
+        } else {
+          acsTrend.textContent = 'Oscillating';
+          acsTrend.className = 'stat-trend neutral';
+        }
+      }
+
+      const gisTrend = $('sirl-trend-gis');
+      if (gisTrend) {
+        if (gis > 0.85) {
+          gisTrend.textContent = 'Aligned';
+          gisTrend.className = 'stat-trend up';
+        } else {
+          gisTrend.textContent = 'Violated';
+          gisTrend.className = 'stat-trend neutral';
+        }
+      }
+
+      const rsrTrend = $('sirl-trend-rsr');
+      if (rsrTrend) {
+        if (rsr > 0.85) {
+          rsrTrend.textContent = 'Optimal';
+          rsrTrend.className = 'stat-trend up';
+        } else {
+          rsrTrend.textContent = 'Unstable';
+          rsrTrend.className = 'stat-trend neutral';
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load stability metrics', e);
+  }
+
+  // 2. Load ALIS loops stats
+  try {
+    const data = await api('SIRL', '/loop/stats');
+    const tbody = $('alis-loops-tbody');
+    if (tbody) {
+      if (!data || Object.keys(data).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No active loops monitored</td></tr>';
+      } else {
+        tbody.innerHTML = Object.entries(data).map(([name, stats]) => {
+          return `<tr>
+            <td style="font-family:monospace;font-weight:600">${escapeHTML(name)}</td>
+            <td>${stats.interval_ms}ms</td>
+            <td>${stats.last_duration_ms}ms</td>
+            <td>${relativeTime(stats.last_executed) || stats.last_executed}</td>
+          </tr>`;
+        }).join('');
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load ALIS loops stats', e);
+  }
+
+  // 3. Load CCF Damping
+  await loadCCFDamping();
+
+  // 4. Load Node State environmental data
+  try {
+    const data = await api('SIRL', '/node/state');
+    if (data && !data.error) {
+      $('sirl-node-temp').textContent = data.temperature_c !== undefined ? `${data.temperature_c.toFixed(1)}°C` : '—';
+      $('sirl-node-trust').textContent = data.trust_score !== undefined ? data.trust_score.toFixed(2) : '—';
+      $('sirl-node-workloads').textContent = data.active_workloads !== undefined ? data.active_workloads : '—';
+    }
+  } catch (e) {
+    console.error('Failed to load Node State environmental data', e);
+  }
+}
+
+function parsePrometheusMetrics(text, name) {
+  const regex = new RegExp(`^${name}\\s+([\\d\\.]+)`, 'm');
+  const match = text.match(regex);
+  return match ? parseFloat(match[1]) : 0.0;
+}
+
+async function loadCCFDamping() {
+  const tbody = $('ccf-damping-tbody');
+  if (!tbody) return;
+  try {
+    const data = await api('SIRL', '/ccf/damping');
+    if (!data || data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No active oscillation dampings.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(rec => {
+      const activeBadge = rec.active 
+        ? `<span class="badge badge-amber">DAMPED (${rec.cooldown})</span>`
+        : `<span class="badge badge-green">STABILIZED</span>`;
+      return `<tr>
+        <td style="font-family:monospace;font-weight:600">${escapeHTML(rec.workload_id)}</td>
+        <td>${activeBadge}</td>
+        <td>${rec.count} state transitions</td>
+        <td>${relativeTime(rec.timestamp) || rec.timestamp}</td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="4" class="empty-row" style="color:var(--danger)">Error: ${escapeHTML(e.message)}</td></tr>`;
+  }
+}
+
+async function traceCausalLineage() {
+  const inputEl = $('lineage-workload-id');
+  const placeholder = $('lineage-graph-placeholder');
+  const flowContainer = $('lineage-graph-flow');
+  if (!inputEl || !placeholder || !flowContainer) return;
+
+  const workloadID = inputEl.value.trim();
+  if (!workloadID) {
+    toast('Please enter a workload or intent ID', 'error');
+    return;
+  }
+
+  flowContainer.innerHTML = '<div class="loading-pulse"></div>';
+  flowContainer.classList.remove('hidden');
+  placeholder.classList.add('hidden');
+
+  try {
+    const data = await api('SIRL', `/intent/lineage/${workloadID}`);
+    if (!data || data.error) {
+      const errorMsg = data ? data.error : 'Failed to retrieve lineage graph';
+      flowContainer.innerHTML = `<p style="color:var(--danger);font-size:0.85rem;text-align:center">${escapeHTML(errorMsg)}</p>`;
+      return;
+    }
+
+    const nodes = data.nodes || [];
+    const edges = data.edges || [];
+
+    if (nodes.length === 0) {
+      flowContainer.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;text-align:center">No causal lineage nodes found for this workload.</p>';
+      return;
+    }
+
+    // Sort nodes chronologically
+    nodes.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    // Render timeline flow
+    let html = '';
+    nodes.forEach((node, idx) => {
+      // Find outbound connections
+      const outbound = edges.filter(e => e.from_node === node.id);
+
+      let connectionText = '';
+      if (outbound.length > 0) {
+        connectionText = `<div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.25rem">
+          ➔ Relates via <strong>${escapeHTML(outbound.map(e => `${e.relation_type} (${e.to_node})`).join(', '))}</strong>
+        </div>`;
+      }
+
+      // Pick badge colors based on node type
+      let typeBadgeClass = 'badge-blue';
+      if (node.type === 'intent') typeBadgeClass = 'badge-purple';
+      else if (node.type === 'decision') typeBadgeClass = 'badge-amber';
+      else if (node.type === 'action') typeBadgeClass = 'badge-blue';
+      else if (node.type === 'effect') typeBadgeClass = 'badge-green';
+      else if (node.type === 'recovery') typeBadgeClass = 'badge-red';
+      else if (node.type === 'memory') typeBadgeClass = 'badge-green';
+
+      html += `
+        <div style="display:flex;gap:1rem;position:relative;padding-bottom:1rem">
+          ${idx < nodes.length - 1 ? `<div style="position:absolute;left:14px;top:28px;bottom:0;width:2px;background:var(--border)"></div>` : ''}
+          <div style="width:30px;height:30px;border-radius:50%;background:var(--bg-surface);border:2px solid var(--border-bright);display:flex;align-items:center;justify-content:center;z-index:2;flex-shrink:0;font-size:0.8rem">
+            ${idx + 1}
+          </div>
+          <div style="flex:1;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:0.75rem 1rem">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.35rem">
+              <span class="badge ${typeBadgeClass}">${escapeHTML(node.type)}</span>
+              <span style="font-size:0.7rem;color:var(--text-muted);font-family:monospace">${new Date(node.timestamp).toLocaleTimeString()}</span>
+            </div>
+            <div style="font-size:0.85rem;font-weight:600;font-family:monospace;color:var(--text-primary);margin-bottom:0.25rem">${escapeHTML(node.id)}</div>
+            <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.4">${escapeHTML(node.detail)}</div>
+            ${connectionText}
+          </div>
+        </div>
+      `;
+    });
+
+    flowContainer.innerHTML = html;
+
+  } catch (e) {
+    flowContainer.innerHTML = `<p style="color:var(--danger);font-size:0.85rem;text-align:center">Error: ${escapeHTML(e.message)}</p>`;
+  }
+}
+
+window.loadCoordination = loadCoordination;
+window.traceCausalLineage = traceCausalLineage;
+window.loadCCFDamping = loadCCFDamping;
+
+// ─── Sovereign Cognitive Interface Layer (SCIL) ───────────────
+
+function initArtifactTabs() {
+  const tabs = document.querySelectorAll('.artifact-tab');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.artifact-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.artifact-panel').forEach(p => p.classList.remove('active'));
+      
+      tab.classList.add('active');
+      const targetPanel = $(`art-panel-${tab.dataset.tab}`);
+      if (targetPanel) {
+        targetPanel.classList.add('active');
+      }
+      
+      if (tab.dataset.tab === 'cognition') {
+        loadLiveCognitionMap();
+      } else if (tab.dataset.tab === 'hardening') {
+        updateDCCLGaugesInArtifact();
+      }
+    });
+  });
+}
+
+async function loadLiveCognitionMap() {
+  const canvas = $('cognition-map-canvas');
+  if (!canvas) return;
+
+  if (canvas.children.length === 0) {
+    canvas.innerHTML = '<div class="loading-pulse"></div>';
+  }
+
+  const data = await api('COL', '/services');
+  if (!data) {
+    canvas.innerHTML = '<div style="color:var(--danger);font-size:0.8rem;padding:8px">Failed to load cognition map.</div>';
+    return;
+  }
+
+  canvas.innerHTML = '';
+
+  const services = data || [];
+  if (services.length === 0) {
+    canvas.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:8px">No active services detected.</div>';
+    return;
+  }
+
+  services.forEach(svc => {
+    const rawName = svc.names && svc.names.length > 0 ? svc.names[0] : svc.name || 'unknown';
+    let cleanName = rawName.replace(/^\/?kalpana-/, '');
+
+    const node = document.createElement('div');
+    node.className = 'topo-node';
+    
+    let dotColor = 'red';
+    if (svc.state && svc.state.toLowerCase() === 'running') {
+      dotColor = 'green';
+    } else if (svc.state && (svc.state.toLowerCase() === 'created' || svc.state.toLowerCase() === 'restarting' || svc.state.toLowerCase() === 'paused')) {
+      dotColor = 'orange';
+    }
+
+    node.innerHTML = `
+      <span class="pulse-dot ${dotColor}"></span>
+      <span class="node-name">${escapeHTML(cleanName)}</span>
+    `;
+
+    node.addEventListener('click', () => {
+      document.querySelectorAll('.topo-node').forEach(n => n.classList.remove('active-node'));
+      node.classList.add('active-node');
+
+      const detailsCard = $('selected-node-card');
+      if (detailsCard) {
+        detailsCard.classList.remove('hidden');
+        $('node-card-title').textContent = cleanName;
+        
+        const cardStatus = $('node-card-status');
+        cardStatus.textContent = (svc.state || 'unknown').toUpperCase();
+        cardStatus.className = `badge badge-${dotColor === 'green' ? 'green' : dotColor === 'orange' ? 'amber' : 'red'}`;
+
+        $('node-card-image').textContent = svc.image || '—';
+        $('node-card-id').textContent = svc.id ? svc.id.substring(0, 12) : '—';
+        
+        let portsText = '—';
+        if (svc.ports && svc.ports.length > 0) {
+          portsText = svc.ports.join(', ');
+        }
+        $('node-card-ports').textContent = portsText;
+      }
+    });
+
+    canvas.appendChild(node);
+  });
+}
+
+let trackerInterval = null;
+async function startADELTracker(params) {
+  const depTab = $('tab-art-deployment');
+  if (depTab) {
+    document.querySelectorAll('.artifact-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.artifact-panel').forEach(p => p.classList.remove('active'));
+    depTab.classList.add('active');
+    $('art-panel-deployment').classList.add('active');
+  }
+
+  $('dep-meta-info').classList.remove('hidden');
+  $('dep-app-name').textContent = params.name;
+  $('dep-git-repo').textContent = params.repo || params.git_repo || '—';
+  $('dep-platform').textContent = params.platform || 'edge';
+
+  const steps = ['step-clone', 'step-analyze', 'step-db', 'step-sirl'];
+  steps.forEach(id => {
+    const el = $(id);
+    if (el) {
+      el.classList.remove('active', 'done');
+    }
+  });
+
+  $('dep-pipeline-status').textContent = 'BUILDING';
+  $('dep-pipeline-status').className = 'badge badge-amber';
+
+  $('dep-terminal-wrap').classList.remove('hidden');
+  $('dep-terminal-output').textContent = 'Initializing ADEL Autonomous Pipeline...\nSearching for build job...';
+  $('dep-terminal-spinner').classList.add('animate-spin');
+  $('dep-terminal-spinner').style.display = '';
+
+  if (trackerInterval) clearInterval(trackerInterval);
+
+  let buildId = null;
+  let attempts = 0;
+
+  trackerInterval = setInterval(async () => {
+    attempts++;
+    if (!buildId) {
+      const builds = await api('COL', '/apps/builds');
+      if (builds && builds.length > 0) {
+        const targetBuild = builds.find(b => 
+          b.app_name.toLowerCase().includes(params.name.toLowerCase()) || 
+          params.name.toLowerCase().includes(b.app_name.toLowerCase())
+        ) || builds[0];
+
+        if (targetBuild) {
+          buildId = targetBuild.id;
+          $('dep-terminal-output').textContent = `Target build job: ${buildId}\nStreaming compiler logs...\n`;
+        }
+      }
+      if (!buildId && attempts > 10) {
+        clearInterval(trackerInterval);
+        $('dep-pipeline-status').textContent = 'FAILED';
+        $('dep-pipeline-status').className = 'badge badge-red';
+        $('dep-terminal-output').textContent += '\n\nError: Timeout waiting for build job allocation.';
+        $('dep-terminal-spinner').classList.remove('animate-spin');
+        $('dep-terminal-spinner').style.display = 'none';
+      }
+      return;
+    }
+
+    try {
+      const builds = await api('COL', '/apps/builds');
+      const currentBuild = builds ? builds.find(b => b.id === buildId) : null;
+      
+      const logsRes = await fetch(`${API.COL}/apps/builds/${buildId}/logs`, {
+        headers: state.token ? { 'Authorization': `Bearer ${state.token}` } : {}
+      });
+      
+      let logsText = '';
+      if (logsRes.ok) {
+        logsText = await logsRes.text();
+      }
+
+      if (logsText) {
+        $('dep-terminal-output').textContent = logsText;
+        const term = $('dep-terminal-output');
+        term.scrollTop = term.scrollHeight;
+
+        const hasCloneStarted = logsText.toLowerCase().includes('cloning') || logsText.toLowerCase().includes('git clone');
+        const hasCloneDone = logsText.toLowerCase().includes('cloned') || logsText.toLowerCase().includes('semantic analysis') || logsText.toLowerCase().includes('rce:') || logsText.toLowerCase().includes('inferred application topology');
+        updateStepUI('step-clone', hasCloneStarted, hasCloneDone);
+
+        const hasAnalysisStarted = logsText.toLowerCase().includes('rce:') || logsText.toLowerCase().includes('starting autonomous deployment');
+        const hasAnalysisDone = logsText.toLowerCase().includes('inferred application topology') || logsText.toLowerCase().includes('provisioning') || logsText.toLowerCase().includes('dockerfile found') || logsText.toLowerCase().includes('no dockerfile found');
+        updateStepUI('step-analyze', hasAnalysisStarted, hasAnalysisDone);
+
+        const hasDBStarted = logsText.toLowerCase().includes('provisioning') || logsText.toLowerCase().includes('database') || logsText.toLowerCase().includes('connecting');
+        const hasDBDone = logsText.toLowerCase().includes('assigning domain') || logsText.toLowerCase().includes('assigned') || logsText.toLowerCase().includes('sirl: scheduling') || logsText.toLowerCase().includes('scheduling backend');
+        updateStepUI('step-db', hasDBStarted, hasDBDone);
+
+        const hasSIRLStarted = logsText.toLowerCase().includes('scheduling') || logsText.toLowerCase().includes('sirl');
+        const hasSIRLDone = logsText.toLowerCase().includes('completed successfully') || logsText.toLowerCase().includes('build finished with status: success') || (currentBuild && currentBuild.status === 'success');
+        updateStepUI('step-sirl', hasSIRLStarted, hasSIRLDone);
+      }
+
+      if (currentBuild) {
+        if (currentBuild.status === 'success') {
+          clearInterval(trackerInterval);
+          $('dep-pipeline-status').textContent = 'SUCCESS';
+          $('dep-pipeline-status').className = 'badge badge-green';
+          $('dep-terminal-spinner').classList.remove('animate-spin');
+          $('dep-terminal-spinner').style.display = 'none';
+          toast('Application deployed successfully!', 'success');
+          loadLiveCognitionMap();
+        } else if (currentBuild.status === 'failed') {
+          clearInterval(trackerInterval);
+          $('dep-pipeline-status').textContent = 'FAILED';
+          $('dep-pipeline-status').className = 'badge badge-red';
+          $('dep-terminal-spinner').classList.remove('animate-spin');
+          $('dep-terminal-spinner').style.display = 'none';
+          toast('Application deployment failed', 'error');
+        }
+      }
+    } catch (err) {
+      console.error('Error tracking build logs', err);
+    }
+  }, 2000);
+}
+
+function updateStepUI(stepId, started, done) {
+  const el = $(stepId);
+  if (!el) return;
+  if (done) {
+    el.classList.remove('active');
+    el.classList.add('done');
+  } else if (started) {
+    el.classList.add('active');
+    el.classList.remove('done');
+  } else {
+    el.classList.remove('active', 'done');
+  }
+}
+
+async function updateDCCLGaugesInArtifact() {
+  try {
+    const res = await fetch(`${API.SIRL}/metrics`, {
+      headers: state.token ? { 'Authorization': `Bearer ${state.token}` } : {}
+    });
+    if (res.status === 401) { logout(); return; }
+    if (res.ok) {
+      const text = await res.text();
+      const csi = parsePrometheusMetrics(text, 'sirl_cognitive_stability_index');
+      const acs = parsePrometheusMetrics(text, 'sirl_autonomous_convergence_score');
+      const gis = parsePrometheusMetrics(text, 'sirl_governance_integrity_score');
+      const rsr = parsePrometheusMetrics(text, 'sirl_recovery_stability_ratio');
+
+      const elCsi = $('art-csi'); if (elCsi) elCsi.textContent = csi.toFixed(2);
+      const elAcs = $('art-acs'); if (elAcs) elAcs.textContent = acs.toFixed(2);
+      const elGis = $('art-gis'); if (elGis) elGis.textContent = gis.toFixed(2);
+      const elRsr = $('art-rsr'); if (elRsr) elRsr.textContent = rsr.toFixed(2);
+    }
+  } catch (e) {
+    console.error('Failed to load stability metrics for artifact', e);
+  }
+
+  try {
+    const data = await api('SIRL', '/loop/stats');
+    const tbody = $('art-alis-loops-tbody');
+    if (tbody) {
+      if (!data || Object.keys(data).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="empty-row">No active loops monitored</td></tr>';
+      } else {
+        tbody.innerHTML = Object.entries(data).map(([name, stats]) => {
+          const status = stats.last_duration_ms > stats.interval_ms ? '<span class="badge badge-red">DELAYED</span>' : '<span class="badge badge-green">HEALTHY</span>';
+          return `<tr>
+            <td style="font-family:monospace;font-weight:600">${escapeHTML(name)}</td>
+            <td>${stats.last_duration_ms}ms</td>
+            <td>${status}</td>
+          </tr>`;
+        }).join('');
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load ALIS loops stats for artifact', e);
+  }
+
+  try {
+    const tbody = $('art-ccf-damping-tbody');
+    if (tbody) {
+      const data = await api('SIRL', '/ccf/damping');
+      if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="empty-row">No active oscillation suppression.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.map(rec => {
+        const activeBadge = rec.active 
+          ? `<span class="badge badge-amber">DAMPED</span>`
+          : `<span class="badge badge-green">STABILIZED</span>`;
+        return `<tr>
+          <td style="font-family:monospace;font-weight:600">${escapeHTML(rec.workload_id)}</td>
+          <td>${activeBadge}</td>
+          <td>${rec.count}</td>
+        </tr>`;
+      }).join('');
+    }
+  } catch (e) {
+    console.error('Failed to load CCF Damping for artifact', e);
+  }
+}
+
+window.initArtifactTabs = initArtifactTabs;
+window.loadLiveCognitionMap = loadLiveCognitionMap;
+window.startADELTracker = startADELTracker;
+window.updateDCCLGaugesInArtifact = updateDCCLGaugesInArtifact;
+

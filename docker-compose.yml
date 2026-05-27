@@ -307,6 +307,8 @@ services:
       ORCHESTRATOR_URL: http://orchestrator:8006
     ports:
       - "3000:80"
+    volumes:
+      - ./deploy/certs:/certs:ro
     mem_limit: 50m
     restart: unless-stopped
     depends_on:

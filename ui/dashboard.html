@@ -111,6 +111,12 @@
           <span class="nav-icon">📊</span>
           <span>Sovereign Analytics</span>
         </button>
+        <!-- Phase 7 Nav -->
+        <div class="nav-section-label">Phase 7 · Sovereignty & DCCL</div>
+        <button class="nav-item" data-page="coordination" id="nav-coordination">
+          <span class="nav-icon">🛡️</span>
+          <span>Sovereign DCCL</span>
+        </button>
         <!-- App Compiler Nav -->
         <div class="nav-section-label">Application Deployment</div>
         <button class="nav-item" data-page="apps" id="nav-apps">
@@ -236,6 +242,7 @@
         </div>
 
         <div class="chat-layout">
+          <!-- Chat container on left -->
           <div class="chat-container glass">
             <div class="chat-messages" id="chat-messages">
               <div class="chat-welcome">
@@ -272,6 +279,148 @@
                 </button>
               </div>
               <div class="chat-footer-hint">KalpanaAI will ask for confirmation before any destructive action</div>
+            </div>
+          </div>
+
+          <!-- Sovereign Cognitive Artifact Container on right -->
+          <div class="artifact-container glass">
+            <div class="artifact-tabs">
+              <button class="artifact-tab active" data-tab="cognition" id="tab-art-cognition">⚛ Live Cognition</button>
+              <button class="artifact-tab" data-tab="deployment" id="tab-art-deployment">📦 Deployment Pipeline</button>
+              <button class="artifact-tab" data-tab="hardening" id="tab-art-hardening">🛡️ DCCL Hardening</button>
+            </div>
+            
+            <div class="artifact-body">
+              <!-- Live Cognition panel -->
+              <div id="art-panel-cognition" class="artifact-panel active">
+                <div class="panel-header">
+                  <h4>Sovereign Cognitive Map</h4>
+                  <span class="pulse-dot green" id="cog-status-dot"></span>
+                </div>
+                <p class="panel-desc">Real-time topological graph of active services and network nodes.</p>
+                
+                <div class="topology-canvas" id="cognition-map-canvas">
+                  <!-- Dynamically populated nodes -->
+                </div>
+                
+                <div class="selected-node-details glass hidden" id="selected-node-card">
+                  <div class="node-card-header">
+                    <span class="node-card-name" id="node-card-title">nginx</span>
+                    <span class="badge badge-green" id="node-card-status">RUNNING</span>
+                  </div>
+                  <div class="node-card-body">
+                    <div class="node-info-item"><span>Image:</span><span id="node-card-image">nginx:alpine</span></div>
+                    <div class="node-info-item"><span>ID:</span><span id="node-card-id">-</span></div>
+                    <div class="node-info-item"><span>Ports:</span><span id="node-card-ports">8080->80/tcp</span></div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Deployment Pipeline panel -->
+              <div id="art-panel-deployment" class="artifact-panel">
+                <div class="panel-header">
+                  <h4>ADEL Deployment Pipeline</h4>
+                  <span class="badge badge-purple" id="dep-pipeline-status">IDLE</span>
+                </div>
+                <p class="panel-desc">Semantic analysis, auto-database provisioning, and build logging.</p>
+                
+                <div class="dep-meta-info glass hidden" id="dep-meta-info">
+                  <div class="meta-row"><span>App Name:</span><span id="dep-app-name">—</span></div>
+                  <div class="meta-row"><span>Git Repo:</span><span id="dep-git-repo">—</span></div>
+                  <div class="meta-row"><span>Target Platform:</span><span id="dep-platform">—</span></div>
+                </div>
+
+                <div class="pipeline-steps">
+                  <div class="step-item" id="step-clone">
+                    <div class="step-marker">1</div>
+                    <div class="step-label">Clone Repository</div>
+                  </div>
+                  <div class="step-item" id="step-analyze">
+                    <div class="step-marker">2</div>
+                    <div class="step-label">Semantic Analysis (RCE)</div>
+                  </div>
+                  <div class="step-item" id="step-db">
+                    <div class="step-marker">3</div>
+                    <div class="step-label">Provision Databases</div>
+                  </div>
+                  <div class="step-item" id="step-sirl">
+                    <div class="step-marker">4</div>
+                    <div class="step-label">Workload Scheduling (SIRL)</div>
+                  </div>
+                </div>
+                
+                <div class="dep-terminal-wrap hidden" id="dep-terminal-wrap">
+                  <div class="terminal-header">
+                    <span>Live Compilation Terminal</span>
+                    <span class="btn-spinner animate-spin" id="dep-terminal-spinner">⟳</span>
+                  </div>
+                  <pre class="dep-terminal" id="dep-terminal-output">Waiting for deployment stream...</pre>
+                </div>
+              </div>
+              
+              <!-- DCCL Hardening panel -->
+              <div id="art-panel-hardening" class="artifact-panel">
+                <div class="panel-header">
+                  <h4>Bounded Autonomy & Hardening</h4>
+                  <span class="badge badge-blue">DCCL Real-time</span>
+                </div>
+                <p class="panel-desc">Real-time stability scores and oscillation damping controls.</p>
+                
+                <div class="gauge-grid">
+                  <div class="gauge-box glass">
+                    <span class="gauge-val" id="art-csi">0.00</span>
+                    <span class="gauge-lbl">CSI (Stability)</span>
+                  </div>
+                  <div class="gauge-box glass">
+                    <span class="gauge-val" id="art-acs">0.00</span>
+                    <span class="gauge-lbl">ACS (Convergence)</span>
+                  </div>
+                  <div class="gauge-box glass">
+                    <span class="gauge-val" id="art-gis">0.00</span>
+                    <span class="gauge-lbl">GIS (Integrity)</span>
+                  </div>
+                  <div class="gauge-box glass">
+                    <span class="gauge-val" id="art-rsr">0.00</span>
+                    <span class="gauge-lbl">RSR (Recovery)</span>
+                  </div>
+                </div>
+                
+                <div class="card-header" style="margin-top:1.5rem;padding-bottom:0.5rem">
+                  <h5>Active Oscillation Damping</h5>
+                </div>
+                <div class="table-container">
+                  <table class="data-table" style="font-size:0.75rem">
+                    <thead>
+                      <tr>
+                        <th>Workload</th>
+                        <th>Damped State</th>
+                        <th>Attempts</th>
+                      </tr>
+                    </thead>
+                    <tbody id="art-ccf-damping-tbody">
+                      <tr><td colspan="3" class="empty-row">No active oscillation suppression.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="card-header" style="margin-top:1.5rem;padding-bottom:0.5rem">
+                  <h5>Entropy Governance Loops</h5>
+                </div>
+                <div class="table-container">
+                  <table class="data-table" style="font-size:0.75rem">
+                    <thead>
+                      <tr>
+                        <th>Loop</th>
+                        <th>Entropy</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="art-alis-loops-tbody">
+                      <tr><td colspan="3" class="empty-row">Loading loops...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -679,6 +828,156 @@
           </div>
           
         </div>
+      </div>
+
+      <!-- ========================================== -->
+      <!-- Phase 7: Sovereign DCCL Dashboard -->
+      <!-- ========================================== -->
+      <div id="page-coordination" class="page">
+        <div class="page-header">
+          <h1>Sovereign DCCL & Hardening</h1>
+          <div class="header-actions">
+            <span class="badge badge-purple">Phase 7 · Bounded Autonomy</span>
+            <button class="btn btn-ghost" id="refresh-coordination-btn">↻ Refresh</button>
+          </div>
+        </div>
+
+        <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:1.5rem;max-width:800px">
+          The Deterministic Cognitive Coordination Layer (DCCL) prevents orchestration deadlocks, detects workflow oscillations, dampens loops, and calculates temporal stability metrics on the Edge node.
+        </p>
+
+        <!-- Stability Metrics Dials -->
+        <div class="stats-grid" style="margin-bottom: 2rem">
+          <div class="stat-card glass">
+            <div class="stat-icon icon-1">🛡️</div>
+            <div class="stat-body">
+              <span class="stat-value" id="sirl-metric-csi">0.00</span>
+              <span class="stat-label">Cognitive Stability (CSI)</span>
+            </div>
+            <div class="stat-trend up" id="sirl-trend-csi">Stable</div>
+          </div>
+          <div class="stat-card glass">
+            <div class="stat-icon icon-2">⚡</div>
+            <div class="stat-body">
+              <span class="stat-value" id="sirl-metric-acs">0.00</span>
+              <span class="stat-label">Convergence Score (ACS)</span>
+            </div>
+            <div class="stat-trend up" id="sirl-trend-acs">Active</div>
+          </div>
+          <div class="stat-card glass">
+            <div class="stat-icon icon-3">⚖</div>
+            <div class="stat-body">
+              <span class="stat-value" id="sirl-metric-gis">0.00</span>
+              <span class="stat-label">Governance Integrity (GIS)</span>
+            </div>
+            <div class="stat-trend up" id="sirl-trend-gis">Aligned</div>
+          </div>
+          <div class="stat-card glass">
+            <div class="stat-icon icon-4">⟳</div>
+            <div class="stat-body">
+              <span class="stat-value" id="sirl-metric-rsr">0.00</span>
+              <span class="stat-label">Recovery Stability (RSR)</span>
+            </div>
+            <div class="stat-trend up" id="sirl-trend-rsr">Optimal</div>
+          </div>
+        </div>
+
+        <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem">
+          
+          <!-- ALIS Loop Scheduler -->
+          <div class="card glass">
+            <div class="card-header">
+              <h3>ALIS Loop Scheduler</h3>
+              <span class="badge badge-blue">Telemetry & Control</span>
+            </div>
+            <p style="color:var(--text-muted);font-size:0.8rem;margin: 0.5rem 0 1rem">
+              Monitors and Suppresses loop schedules dynamically based on execution density (Loop Entropy limit: 0.75).
+            </p>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Loop Name</th>
+                    <th>Interval</th>
+                    <th>Duration</th>
+                    <th>Last Executed</th>
+                  </tr>
+                </thead>
+                <tbody id="alis-loops-tbody">
+                  <tr><td colspan="4" class="empty-row">Loading loop stats…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Bounded Causal Lineage Visualizer (BGTE) -->
+          <div class="card glass">
+            <div class="card-header">
+              <h3>Causal Intent Lineage</h3>
+              <span class="badge badge-purple">Depth-Limited BFS</span>
+            </div>
+            <p style="color:var(--text-muted);font-size:0.8rem;margin: 0.5rem 0 1.25rem">
+              Trace deployment or remediation actions back to their initial trigger (Max query depth: 3 hops).
+            </p>
+            <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem">
+              <input type="text" id="lineage-workload-id" class="input-field" style="margin:0;font-size:0.85rem" placeholder="Enter Workload/Intent ID (e.g. w1)" />
+              <button class="btn btn-primary" id="btn-trace-lineage" style="min-width:120px">Trace</button>
+            </div>
+            <div id="lineage-graph-container" style="border:1px solid var(--border);border-radius:8px;padding:1rem;background:rgba(0,0,0,0.02);min-height:160px;display:flex;flex-direction:column;justify-content:center;align-items:center">
+              <div style="color:var(--text-muted);text-align:center" id="lineage-graph-placeholder">
+                <span style="font-size:2rem">🕸</span>
+                <p style="font-size:0.85rem;margin-top:0.5rem">Submit a Workload ID to scan causal relations</p>
+              </div>
+              <div id="lineage-graph-flow" class="hidden" style="width:100%;display:flex;flex-direction:column;gap:1rem">
+                <!-- Timeline elements will render here -->
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- CCF Damping Alerts & Physical Metrics -->
+        <div class="card glass" style="margin-bottom: 2rem">
+          <div class="card-header">
+            <h3>Active Oscillation Damping & Telemetry</h3>
+            <span class="badge badge-amber">Node equilibrium</span>
+          </div>
+          <div style="display:grid;grid-template-columns: 2fr 1fr; gap:1.5rem; margin-top: 1rem">
+            <div>
+              <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1rem">
+                Workloads undergoing active state change suppression by Cognitive Convergence Framework.
+              </p>
+              <div class="table-container">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Workload ID</th>
+                      <th>Damped Status</th>
+                      <th>Remediation Attempt</th>
+                      <th>Stabilized State</th>
+                    </tr>
+                  </thead>
+                  <tbody id="ccf-damping-tbody">
+                    <tr><td colspan="4" class="empty-row">No active oscillation dampings.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div style="border-left:1px solid var(--border);padding-left:1.5rem;display:flex;flex-direction:column;gap:1rem">
+              <h4 style="margin:0;font-size:0.95rem">Edge Environmental Data</h4>
+              <div class="info-row" style="display:flex;justify-content:space-between;font-size:0.85rem">
+                <span>CPU Temp</span><span id="sirl-node-temp">—</span>
+              </div>
+              <div class="info-row" style="display:flex;justify-content:space-between;font-size:0.85rem">
+                <span>Node Trust Score</span><span id="sirl-node-trust">—</span>
+              </div>
+              <div class="info-row" style="display:flex;justify-content:space-between;font-size:0.85rem">
+                <span>Active Container Count</span><span id="sirl-node-workloads">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- ========================================== -->

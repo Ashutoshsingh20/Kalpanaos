@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -283,18 +284,36 @@ func (d *Daemon) setupRouter() *chi.Mux {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "service": "sirl", "node_id": d.cfg.NodeID})
 	})
+	r.Get("/api/sirl/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "service": "sirl", "node_id": d.cfg.NodeID})
+	})
 
 	r.Handle("/metrics", promhttp.Handler())
+	r.Handle("/api/sirl/metrics", promhttp.Handler())
+
+	// Helper to register routes under both "/" and "/api/sirl"
+	registerRoute := func(method, path string, handler http.HandlerFunc) {
+		cleanPath := strings.TrimPrefix(path, "/")
+		if method == "POST" {
+			r.Post("/"+cleanPath, handler)
+			r.Post("/api/sirl/"+cleanPath, handler)
+		} else if method == "GET" {
+			r.Get("/"+cleanPath, handler)
+			r.Get("/api/sirl/"+cleanPath, handler)
+		}
+	}
 
 	// Workload administration REST API
-	r.Post("/api/sirl/workloads", d.handlePOSTWorkload)
-	r.Get("/api/sirl/recovery/status/{id}", d.handleGETRecoveryStatus)
-	r.Get("/api/sirl/node/state", d.handleGETNodeState)
+	registerRoute("POST", "/workloads", d.handlePOSTWorkload)
+	registerRoute("GET", "/recovery/status/{id}", d.handleGETRecoveryStatus)
+	registerRoute("GET", "/node/state", d.handleGETNodeState)
+	registerRoute("GET", "/ccf/damping", d.handleGETCCFDamping)
 
 	// Harden verification API
-	r.Get("/api/sirl/intent/lineage/{id}", d.handleGETIntentLineage)
-	r.Post("/api/sirl/governance/quota/validate", d.handlePOSTQuotaValidate)
-	r.Get("/api/sirl/loop/stats", d.handleGETLoopStats)
+	registerRoute("GET", "/intent/lineage/{id}", d.handleGETIntentLineage)
+	registerRoute("POST", "/governance/quota/validate", d.handlePOSTQuotaValidate)
+	registerRoute("GET", "/loop/stats", d.handleGETLoopStats)
 
 	return r
 }

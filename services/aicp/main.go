@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -357,7 +358,24 @@ func (s *Store) ResolveAnomaly(id, note string) bool {
 // NVIDIA API client
 // ---------------------------------------------------------------------------
 
-const systemPrompt = `You are KalpanaAI, the intelligent control plane of KalpanaOS - a sovereign AI-native cloud operating system. You help operators manage their infrastructure through natural language. You have access to infrastructure state and can issue commands. For destructive operations (stopping or deleting services), always ask for confirmation first. Be concise, technical, and precise. When you recommend an infrastructure action, format it as: [ACTION: command_type | description]`
+const systemPrompt = `You are KalpanaAI, the intelligent control plane of KalpanaOS - a sovereign AI-native cloud operating system. You help operators manage their infrastructure through natural language. You have access to infrastructure state and can issue commands. For destructive operations (stopping or deleting services), always ask for confirmation first. Be concise, technical, and precise.
+
+When you recommend an infrastructure action, format it as: [ACTION: command_type | description]
+
+Available commands and their formats:
+1. Deploying a Git repository as an application (RCE & ADEL pipeline):
+   [ACTION: deploy_app | name=<app_name> repo=<git_repo_url> platform=<web|android|ios>]
+   Always infer the application 'name' (lowercase, alphanumeric, no spaces, e.g. 'smartevent' from 'SmartEvent-AI.git') and determine the platform (default is 'web'). This command will run immediately.
+2. Deploying a generic Docker container service:
+   [ACTION: deploy_service | name=<service_name> image=<docker_image> ports=<ports_comma_separated> env=<env_comma_separated>]
+3. Stopping/removing a service:
+   [ACTION: remove_service | name=<service_name>]
+4. Restarting a service:
+   [ACTION: restart_service | name=<service_name>]
+5. Scaling a service:
+   [ACTION: scale_service | name=<service_name> replicas=<number_of_replicas>]
+6. Rolling back a service:
+   [ACTION: rollback_service | name=<service_name>]`
 
 type NvidiaMessage struct {
 	Role    string `json:"role"`
@@ -596,7 +614,7 @@ type SSISearchResult struct {
 	Score   float64 `json:"score"`
 }
 
-func ssiSearch(ctx context.Context, baseURL, query string) ([]SSISearchResult, error) {
+func ssiSearch(ctx context.Context, baseURL, query, token string) ([]SSISearchResult, error) {
 	payload := map[string]interface{}{"query": query, "top_k": 3}
 	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/search", bytes.NewReader(body))
@@ -604,6 +622,9 @@ func ssiSearch(ctx context.Context, baseURL, query string) ([]SSISearchResult, e
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", token)
+	}
 	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
 		return nil, err
@@ -637,7 +658,7 @@ type MemorySearchResult struct {
 	CreatedAt string `json:"created_at"`
 }
 
-func ssiMemorySearch(ctx context.Context, ssiURL, query string) ([]MemorySearchResult, error) {
+func ssiMemorySearch(ctx context.Context, ssiURL, query, token string) ([]MemorySearchResult, error) {
 	payload := map[string]interface{}{"query": query, "limit": 3}
 	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ssiURL+"/memory/search", bytes.NewReader(body))
@@ -645,6 +666,9 @@ func ssiMemorySearch(ctx context.Context, ssiURL, query string) ([]MemorySearchR
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", token)
+	}
 	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
 		return nil, err
@@ -779,10 +803,13 @@ type COLService struct {
 	Image  string `json:"image"`
 }
 
-func colListServices(ctx context.Context, baseURL string) ([]COLService, error) {
+func colListServices(ctx context.Context, baseURL, token string) ([]COLService, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/services", nil)
 	if err != nil {
 		return nil, err
+	}
+	if token != "" {
+		req.Header.Set("Authorization", token)
 	}
 	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
@@ -857,6 +884,9 @@ func isDestructive(cmdType string) bool {
 
 func isSafeCommand(cmdType string) bool {
 	lower := strings.ToLower(cmdType)
+	if strings.Contains(lower, "deploy") || strings.Contains(lower, "restart") || strings.Contains(lower, "scale") || strings.Contains(lower, "rollback") || strings.Contains(lower, "build") {
+		return true
+	}
 	for _, kw := range safeKeywords {
 		if strings.Contains(lower, kw) {
 			return true
@@ -869,28 +899,350 @@ func isSafeCommand(cmdType string) bool {
 // COL / AAF command execution
 // ---------------------------------------------------------------------------
 
-func executeCommandViaCOL(ctx context.Context, cfg Config, cmd *PendingCommand) error {
-	url := cfg.COLURL + "/commands"
-	body, _ := json.Marshal(map[string]interface{}{
-		"command_type": cmd.CommandType,
-		"payload":      cmd.Payload,
-		"description":  cmd.Description,
-	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return err
+func parseParams(desc string) map[string]string {
+	params := make(map[string]string)
+	fields := strings.Fields(desc)
+	for _, field := range fields {
+		parts := strings.SplitN(field, "=", 2)
+		if len(parts) == 2 {
+			k := strings.TrimSpace(parts[0])
+			v := strings.TrimSpace(parts[1])
+			v = strings.Trim(v, `"'`)
+			params[k] = v
+		}
 	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
-	if err != nil {
-		return err
+	return params
+}
+
+func executeCommandViaCOL(ctx context.Context, cfg Config, cmd *PendingCommand, token string) error {
+	cmdType := strings.ToLower(cmd.CommandType)
+	params := parseParams(cmd.Description)
+
+	httpClient := &http.Client{Timeout: 60 * time.Second}
+
+	switch cmdType {
+	case "deploy_app", "register_app", "build_app":
+		repo := params["repo"]
+		if repo == "" {
+			repo = params["git_repo"]
+		}
+		name := params["name"]
+		if name == "" {
+			name = params["app_name"]
+		}
+		if repo == "" || name == "" {
+			return fmt.Errorf("deploy_app requires 'name' and 'repo' parameters")
+		}
+
+		platform := params["platform"]
+		if platform == "" {
+			platform = "web"
+		}
+		branch := params["branch"]
+		if branch == "" {
+			branch = "main"
+		}
+		domain := params["domain"]
+
+		// 1. POST /apps/register
+		registerURL := cfg.COLURL + "/apps/register"
+		regBody, err := json.Marshal(map[string]string{
+			"name":     name,
+			"platform": platform,
+			"git_repo": repo,
+			"branch":   branch,
+			"domain":   domain,
+		})
+		if err != nil {
+			return fmt.Errorf("marshal register request: %w", err)
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, registerURL, bytes.NewReader(regBody))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if token != "" {
+			req.Header.Set("Authorization", token)
+		}
+
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("POST /apps/register failed: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 400 {
+			b, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("register app returned %d: %s", resp.StatusCode, string(b))
+		}
+
+		var regResp struct {
+			ID       string `json:"id"`
+			Status   string `json:"status"`
+			Platform string `json:"platform"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&regResp); err != nil {
+			return fmt.Errorf("decode register response: %w", err)
+		}
+
+		// 2. POST /apps/build
+		buildURL := cfg.COLURL + "/apps/build"
+		buildBody, err := json.Marshal(map[string]string{
+			"app_id": regResp.ID,
+		})
+		if err != nil {
+			return fmt.Errorf("marshal build request: %w", err)
+		}
+
+		reqBuild, err := http.NewRequestWithContext(ctx, http.MethodPost, buildURL, bytes.NewReader(buildBody))
+		if err != nil {
+			return err
+		}
+		reqBuild.Header.Set("Content-Type", "application/json")
+		if token != "" {
+			reqBuild.Header.Set("Authorization", token)
+		}
+
+		respBuild, err := httpClient.Do(reqBuild)
+		if err != nil {
+			return fmt.Errorf("POST /apps/build failed: %w", err)
+		}
+		defer respBuild.Body.Close()
+
+		if respBuild.StatusCode >= 400 {
+			b, _ := io.ReadAll(respBuild.Body)
+			return fmt.Errorf("build app returned %d: %s", respBuild.StatusCode, string(b))
+		}
+
+		return nil
+
+	case "remove_service", "stop_service", "delete_service":
+		name := params["name"]
+		if name == "" {
+			name = params["service"]
+		}
+		if name == "" {
+			return fmt.Errorf("remove_service requires 'name' parameter")
+		}
+
+		url := fmt.Sprintf("%s/services/%s", cfg.COLURL, name)
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+		if err != nil {
+			return err
+		}
+		if token != "" {
+			req.Header.Set("Authorization", token)
+		}
+
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("DELETE /services/%s failed: %w", url, err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 400 {
+			b, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("remove service returned %d: %s", resp.StatusCode, string(b))
+		}
+		return nil
+
+	case "deploy_service", "deploy", "start_service":
+		name := params["name"]
+		if name == "" {
+			name = params["service"]
+		}
+		image := params["image"]
+		if name == "" || image == "" {
+			return fmt.Errorf("deploy_service requires 'name' and 'image' parameters")
+		}
+
+		var ports []string
+		if pStr, exists := params["ports"]; exists {
+			for _, p := range strings.Split(pStr, ",") {
+				if strings.TrimSpace(p) != "" {
+					ports = append(ports, strings.TrimSpace(p))
+				}
+			}
+		}
+
+		var env []string
+		if eStr, exists := params["env"]; exists {
+			for _, e := range strings.Split(eStr, ",") {
+				if strings.TrimSpace(e) != "" {
+					env = append(env, strings.TrimSpace(e))
+				}
+			}
+		}
+
+		url := cfg.COLURL + "/services/deploy"
+		deployBody, err := json.Marshal(map[string]interface{}{
+			"name":  name,
+			"image": image,
+			"ports": ports,
+			"env":   env,
+		})
+		if err != nil {
+			return fmt.Errorf("marshal deploy request: %w", err)
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(deployBody))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if token != "" {
+			req.Header.Set("Authorization", token)
+		}
+
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("POST /services/deploy failed: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 400 {
+			b, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("deploy service returned %d: %s", resp.StatusCode, string(b))
+		}
+		return nil
+
+	case "restart_service":
+		name := params["name"]
+		if name == "" {
+			name = params["service"]
+		}
+		if name == "" {
+			return fmt.Errorf("restart_service requires 'name' parameter")
+		}
+
+		url := fmt.Sprintf("%s/services/%s/restart", cfg.COLURL, name)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+		if err != nil {
+			return err
+		}
+		if token != "" {
+			req.Header.Set("Authorization", token)
+		}
+
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("POST %s failed: %w", url, err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 400 {
+			b, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("restart service returned %d: %s", resp.StatusCode, string(b))
+		}
+		return nil
+
+	case "scale_service":
+		name := params["name"]
+		if name == "" {
+			name = params["service"]
+		}
+		if name == "" {
+			return fmt.Errorf("scale_service requires 'name' parameter")
+		}
+
+		replicasStr := params["replicas"]
+		if replicasStr == "" {
+			replicasStr = params["count"]
+		}
+		replicas := 1
+		if replicasStr != "" {
+			if rVal, err := strconv.Atoi(replicasStr); err == nil {
+				replicas = rVal
+			}
+		}
+
+		url := fmt.Sprintf("%s/services/%s/scale", cfg.COLURL, name)
+		scaleBody, err := json.Marshal(map[string]interface{}{
+			"replicas": replicas,
+		})
+		if err != nil {
+			return fmt.Errorf("marshal scale request: %w", err)
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(scaleBody))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if token != "" {
+			req.Header.Set("Authorization", token)
+		}
+
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("POST %s failed: %w", url, err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 400 {
+			b, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("scale service returned %d: %s", resp.StatusCode, string(b))
+		}
+		return nil
+
+	case "rollback_service":
+		name := params["name"]
+		if name == "" {
+			name = params["service"]
+		}
+		if name == "" {
+			return fmt.Errorf("rollback_service requires 'name' parameter")
+		}
+
+		url := fmt.Sprintf("%s/services/%s/rollback", cfg.COLURL, name)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+		if err != nil {
+			return err
+		}
+		if token != "" {
+			req.Header.Set("Authorization", token)
+		}
+
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("POST %s failed: %w", url, err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 400 {
+			b, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("rollback service returned %d: %s", resp.StatusCode, string(b))
+		}
+		return nil
+
+	default:
+		// Fallback to post to raw /commands if there is any other command type (just in case)
+		url := cfg.COLURL + "/commands"
+		body, _ := json.Marshal(map[string]interface{}{
+			"command_type": cmd.CommandType,
+			"payload":      cmd.Payload,
+			"description":  cmd.Description,
+		})
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if token != "" {
+			req.Header.Set("Authorization", token)
+		}
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			b, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("col command returned %d: %s", resp.StatusCode, string(b))
+		}
+		return nil
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("col command returned %d: %s", resp.StatusCode, string(b))
-	}
-	return nil
 }
 
 // ---------------------------------------------------------------------------
@@ -982,10 +1334,11 @@ func (h *Handler) chat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+	token := r.Header.Get("Authorization")
 
 	// --- RAG Step 1: SSI search ---
 	var ragContext strings.Builder
-	ssiResults, err := ssiSearch(ctx, h.cfg.SSIURL, req.Message)
+	ssiResults, err := ssiSearch(ctx, h.cfg.SSIURL, req.Message, token)
 	if err != nil {
 		log.Printf("[WARN] SSI search failed: %v", err)
 	} else if len(ssiResults) > 0 {
@@ -997,7 +1350,7 @@ func (h *Handler) chat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// --- RAG Step 1b (Phase 2): Episodic memory search ---
-	memories, memErr := ssiMemorySearch(ctx, h.cfg.SSIURL, req.Message)
+	memories, memErr := ssiMemorySearch(ctx, h.cfg.SSIURL, req.Message, token)
 	if memErr != nil {
 		log.Printf("[WARN] Memory search failed: %v", memErr)
 	} else if len(memories) > 0 {
@@ -1009,7 +1362,7 @@ func (h *Handler) chat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// --- RAG Step 2: COL infrastructure state ---
-	services, err := colListServices(ctx, h.cfg.COLURL)
+	services, err := colListServices(ctx, h.cfg.COLURL, token)
 	if err != nil {
 		log.Printf("[WARN] COL list services failed: %v", err)
 	} else {
@@ -1097,6 +1450,7 @@ func (h *Handler) chat(w http.ResponseWriter, r *http.Request) {
 			pendingCmd = pc
 			h.publishEvent("aicp.command.pending", pc)
 		} else if isSafeCommand(cmdType) {
+			token := r.Header.Get("Authorization")
 			// Execute safe command immediately (async, non-blocking to response)
 			immediateCmd := &PendingCommand{
 				ID:                   newID(),
@@ -1110,7 +1464,7 @@ func (h *Handler) chat(w http.ResponseWriter, r *http.Request) {
 			go func() {
 				execCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()
-				if err := executeCommandViaCOL(execCtx, h.cfg, immediateCmd); err != nil {
+				if err := executeCommandViaCOL(execCtx, h.cfg, immediateCmd, token); err != nil {
 					log.Printf("[WARN] safe command execution failed: %v", err)
 				}
 			}()
@@ -1176,7 +1530,8 @@ func (h *Handler) confirmPending(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
-	if err := executeCommandViaCOL(ctx, h.cfg, cmd); err != nil {
+	token := r.Header.Get("Authorization")
+	if err := executeCommandViaCOL(ctx, h.cfg, cmd, token); err != nil {
 		log.Printf("[ERROR] command execution failed: %v", err)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "command execution failed: " + err.Error()})
 		return

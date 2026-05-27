@@ -170,13 +170,23 @@
 
   <script>
     let allApps = [];
+    let publicTunnelURL = '';
     const container = document.getElementById('apps-container');
 
     async function fetchApps() {
       try {
         const response = await fetch('/api/col/apps/portal/list');
         if (!response.ok) throw new Error('API fetch failed');
-        allApps = await response.json();
+        const data = await response.json();
+        
+        if (Array.isArray(data)) {
+          allApps = data;
+          publicTunnelURL = '';
+        } else {
+          allApps = data.apps || [];
+          publicTunnelURL = data.public_tunnel_url || '';
+        }
+        
         renderApps('all');
       } catch (err) {
         container.innerHTML = `<div class="empty-state" style="color:var(--red)">✕ Failed to load applications from edge node: ${err.message}</div>`;
@@ -212,14 +222,32 @@
           if (app.platform === 'web') {
             const hostIP = window.location.hostname;
             const hostPort = window.location.port ? `:${window.location.port}` : '';
-            let webAppURL = `/api/col/apps/web/${app.id}/`;
+            
+            // 1. Resolve Local URL
+            let localAppURL = `/api/col/apps/web/${app.id}/`;
             if (app.domain) {
-              webAppURL = `http://${app.domain}${hostPort}`;
+              localAppURL = `http://${app.domain}${hostPort}`;
             } else if (hostIP !== 'localhost' && hostIP !== '127.0.0.1') {
-              webAppURL = `http://${app.id}.${hostIP}.nip.io${hostPort}`;
+              localAppURL = `http://${app.id}.${hostIP}.nip.io${hostPort}`;
             }
-            detailsHTML += `<div class="info-row"><span>URL</span><span>${app.domain || `${app.id}.[IP].nip.io`}</span></div>`;
-            actionHTML = `<a href="${webAppURL}" target="_blank" class="btn btn-primary btn-full">🚀 Launch Web App</a>`;
+            
+            // 2. Resolve Public Tunnel URL
+            let publicAppURL = '';
+            const isPublicTunnel = hostIP.endsWith('.trycloudflare.com') || hostIP.endsWith('.lhr.life');
+            if (isPublicTunnel) {
+              publicAppURL = window.location.origin + `/api/col/apps/web/${app.id}/`;
+            } else if (publicTunnelURL) {
+              publicAppURL = `${publicTunnelURL}/api/col/apps/web/${app.id}/`;
+            }
+            
+            // 3. Render display details
+            let displayURLHTML = `<div class="info-row"><span>Local URL</span><span>${app.domain || `${app.id}.[IP].nip.io`}</span></div>`;
+            if (publicAppURL) {
+              displayURLHTML += `<div class="info-row"><span>Public URL</span><span style="font-size:0.72rem"><a href="${publicAppURL}" target="_blank" style="color:var(--accent);text-decoration:underline">${publicAppURL.replace('https://', '')}</a></span></div>`;
+            }
+            
+            detailsHTML += displayURLHTML;
+            actionHTML = `<a href="${publicAppURL || localAppURL}" target="_blank" class="btn btn-primary btn-full">🚀 Launch Web App</a>`;
           } else if (app.platform === 'android') {
             const downloadURL = `${window.location.origin}/api/col/apps/downloads/${app.latest_build_id}/${app.artifact_file}`;
             actionHTML = `
