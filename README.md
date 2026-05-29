@@ -80,6 +80,70 @@ graph TD
 
 ---
 
+## 🧩 Detailed Service & Feature Architecture
+
+### 1. 🛡️ Sovereign Identity Layer (SIL) — W3C DID & Peer-Trust
+The **Sovereign Identity Layer (SIL)** (implemented in [services/sil](file:///Users/shu/Desktop/Kalpanaos/services/sil)) establishes decentralized trust across the edge nodes of the mesh network without relying on central certificate authorities.
+*   **W3C DID:Key Generation:** Every node generates a persistent cryptographic identity keypair using **Ed25519** upon initialization in [did.go](file:///Users/shu/Desktop/Kalpanaos/services/sil/did.go). This is formatted as a standardized **W3C did:key** string (e.g. `did:key:z6M...`) via a custom Base58BTC multicodec encoder.
+*   **W3C DID Document Resolution:** Resolves local identities into standard W3C DID Documents (`GET /did/document`) mapping authorization methods and assertion credentials.
+*   **Mutual Cryptographic Authentication:** Implements a two-phase challenge-response verification system:
+    1.  **Challenge Issuance (`POST /did/auth/challenge`):** Generates a cryptographically secure random 32-byte hex challenge expiring after 5 minutes to prevent replay attacks.
+    2.  **Challenge Verification (`POST /did/auth/verify`):** Verifies the signature created by the requesting peer using their public key resolved from their DID. Upon verification, SIL issues a signed JWT **Peer Access Token** with the `peer` role.
+*   **Trusted Peer Registry:** Managed dynamically via admin APIs (`/admin/peers`) to authorize, list, or untrust neighbor edge nodes.
+
+### 2. ⚙️ Cloud Operating Layer (COL) — RCE & ADEL Compiler
+The **Cloud Operating Layer (COL)** (implemented in [services/col](file:///Users/shu/Desktop/Kalpanaos/services/col)) serves as the direct execution engine, binding to the host's `/var/run/docker.sock` and compiling source repositories into container deployments.
+*   **Repository Cognition Engine (RCE):** Performs AST-like scanning of cloned project codebases in [rce.go](file:///Users/shu/Desktop/Kalpanaos/services/col/rce.go) to infer application topology:
+    *   *Node/JS:* Parses `package.json` for frontend frameworks (Next.js, React, Vue, Svelte, Angular, Astro), package managers (npm, yarn, pnpm), backend engines (Express, NestJS), and databases.
+    *   *Python:* Scans `requirements.txt` and `pyproject.toml` for frameworks (FastAPI, Django, Flask) and clients.
+    *   *Go:* Audits `go.mod` for Gin frameworks and dependency drivers.
+    *   *Environment / Dockerfiles:* Scans `.env`, `.env.example`, and Docker config files for target databases.
+*   **Agent-Directed Execution Language (ADEL):** Coordinates container image compilation and database provisioning in [adel.go](file:///Users/shu/Desktop/Kalpanaos/services/col/adel.go) based on RCE topology:
+    *   **Auto-Provisioning Databases:** Spins up database runtimes (PostgreSQL, Redis, MongoDB) on the private `kalpana-net` network, mapping URLs dynamically.
+    *   **Fallback Runtimes:** Builds target images if a custom `Dockerfile` exists, or falls back to optimized language runtimes (e.g. `python:3.12-alpine`, `node:18-alpine`, `golang:1.22-alpine`).
+    *   **Ingress Routing:** Dynamically generates local ingress routes (e.g., `*.kalpana.local`) mapping applications to Nginx reverse proxy routing profiles.
+*   **Mobile OTA Compilations:** Resolves iOS IPA (`app-debug.ipa`) and Android APK (`app-debug.apk`) pre-compiled packages in [apps.go](file:///Users/shu/Desktop/Kalpanaos/services/col/apps.go), auto-generating OTA setup manifests (`manifest.plist`) for Safari installations.
+
+### 3. 🤖 Autonomous Agent Framework (AAF) — Multi-Agent Intelligence
+The **Autonomous Agent Framework (AAF)** (implemented in [services/aaf](file:///Users/shu/Desktop/Kalpanaos/services/aaf)) governs a fleet of 9 specialized, event-driven background agents communicating over NATS:
+*   **`InfraReportAgent`:** Polls COL and IKG to aggregate telemetry into plain-English status reports.
+*   **`SearchAgent`:** Coordinates KB retrieval queries over Qdrant Vector database via SSI APIs.
+*   **`AnomalyDetectionAgent`:** Pulls live system logs (Loki) and telemetry metrics (Prometheus), feeding them into the LLM to run diagnostics.
+*   **`MetricAnalysisAgent`:** Runs predictive trend calculations on Prometheus time-series data to locate operational anomalies.
+*   **`PredictiveScalingAgent`:** Auto-scales low-risk services based on resource thresholds and drafts scaling proposals for administrators.
+*   **`KnowledgeSynthesisAgent`:** Compiles search contexts and episodic logs into structured markdown documents.
+*   **`RemediationAgent` (Self-Healing Loop):** Analyzed in [remediation_agent.go](file:///Users/shu/Desktop/Kalpanaos/services/aaf/remediation_agent.go), it queries AICP anomalies and carries out corrective actions (restarting containers, scaling replicas, rolling back to previous image versions, logging outcomes to HashiCorp Vault, and marking anomalies as resolved).
+*   **`SchedulerAgent` (Mesh Scheduling):** Resolves cluster topological relationships via IKG and Prometheus to schedule container workloads over NATS onto the node with the lowest resource load.
+*   **`MemoryCompressionAgent` (LLM-driven Compactor):** Fetches old episodic logs, uses the NVIDIA LLM API to synthesize them into dense abstract insights, writes the compressed summaries back to SSI, and recursively deletes the raw records to prevent edge storage exhaustion.
+
+### 4. 📊 Cognitive Behavior & Analytics Layer (CBAL) — OLAP Telemetry
+The **Cognitive Behavior & Analytics Layer (CBAL)** (implemented in [services/cbal](file:///Users/shu/Desktop/Kalpanaos/services/cbal)) functions as the high-throughput time-series database and stream processing center:
+*   **DuckDB OLAP Analytics Engine:** Embedded analytics database (initialized in [main.go](file:///Users/shu/Desktop/Kalpanaos/services/cbal/main.go)) with strict memory boundaries (capped at 100MB RAM, single execution thread) to preserve edge resource constraints.
+*   **Redpanda Event Backbone:** Pipes internal NATS JetStream topics (`kalpana.col.events`, `kalpana.agent.heartbeat`, `kalpana.anomalies`) into Redpanda event topics.
+*   **Stream Processing Workers:** Concurrently processes micro-batches of telemetry events to:
+    *   Write raw metric indices, container lifecycle histories, and system anomalies into DuckDB.
+    *   **Enrich Telemetry with IKG:** Resolves nodes to topological regions via graph query APIs.
+    *   **Remediation Storm Protection:** Tracks recovery event loops per service. If a container crashes/restarts > 5 times within a window, it halts the loop and broadcasts a critical PGE security override event.
+
+### 5. 🔒 Policy & Governance Engine (PGE) — Constitutional Safeguards
+The **Policy & Governance Engine (PGE)** (implemented in [services/pge](file:///Users/shu/Desktop/Kalpanaos/services/pge)) serves as the inline firewall intercepting all container deployments and state changes:
+*   **Regex-based Access Policies:** Evaluates deployment requests against rulesets in [main.go](file:///Users/shu/Desktop/Kalpanaos/services/pge/main.go) (e.g. denying deletions of core services matching `kalpana-(sil|nats|pge|col|ssi|aicp|aaf|orchestrator)`).
+*   **Role Enforcement:** Validates admin/agent JSON Web Tokens via SIL endpoints before executing CRUD actions on policies.
+*   **Bypass Override:** Features a bypass key (`PGE_BYPASS_TOKEN` / `godmode-override`) for emergency cluster access.
+
+### 6. 🕸️ Infrastructure Knowledge Graph (IKG) — Real-Time Dependency Map
+The **Infrastructure Knowledge Graph (IKG)** (implemented in [services/ikg](file:///Users/shu/Desktop/Kalpanaos/services/ikg)) compiles the live topological state of the cluster:
+*   **In-Memory Adjacency List:** Highly optimized adjacency map in Go (defined in [main.go](file:///Users/shu/Desktop/Kalpanaos/services/ikg/main.go)) tracking nodes, services, and their relationships with <20MB memory footprints.
+*   **Lifecycle Syncing:** Listens to NATS `kalpana.col.events` (e.g. `deployed`, `removed`) to automatically add or remove service nodes and their network edges.
+*   **Graph Query API:** Exposes subgraphs and full topological logs (`GET /graph/{id}`, `GET /query`) for AI planning and mesh task scheduling.
+
+### 7. 🌐 Federated Distributed Cognition Layer (FDCL) — P2P Mesh Router
+The **Federated Distributed Cognition Layer (FDCL)** (implemented in [services/fdcl](file:///Users/shu/Desktop/Kalpanaos/services/fdcl)) enables horizontal mesh scaling across isolated edge hosts:
+*   **P2P Gossip Discovery:** Nodes broadcast local agent sets over NATS (`kalpana.fdcl.gossip` in [main.go](file:///Users/shu/Desktop/Kalpanaos/services/fdcl/main.go)) and build a shared cluster capability map, automatically pruning stale remote nodes after 60 seconds of silence.
+*   **Request-Reply Task Tunneling:** Routes jobs targeting remote capabilities to the appropriate peer node using NATS request-reply pipelines (`kalpana.aaf.tasks.<node_id>`).
+
+---
+
 ## 🛡️ Sovereign Infrastructure Runtime Layer (SIRL)
 
 The **Sovereign Infrastructure Runtime Layer (SIRL)** functions as an AI-native runtime substrate for distributed cognitive workloads. It enforces strict security boundaries and resources under edge constraints:
