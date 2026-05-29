@@ -16,11 +16,19 @@ func (d *Daemon) EvaluateLocalPolicies(ctx context.Context, spec WorkloadSpec) (
 		return false, fmt.Errorf("resource cap violation: memory limit %d bytes exceeds 512MB threshold", spec.MemoryLimitBytes)
 	}
 
-	// 2. Image registry origin checks (must be docker.io or kalpana registries)
 	if !strings.HasPrefix(spec.Image, "docker.io/") &&
 		!strings.HasPrefix(spec.Image, "nginx") &&
 		!strings.HasPrefix(spec.Image, "alpine") &&
-		!strings.Contains(spec.Image, "kalpana") {
+		!strings.HasPrefix(spec.Image, "node") &&
+		!strings.HasPrefix(spec.Image, "python") &&
+		!strings.HasPrefix(spec.Image, "golang") &&
+		!strings.HasPrefix(spec.Image, "postgres") &&
+		!strings.HasPrefix(spec.Image, "redis") &&
+		!strings.HasPrefix(spec.Image, "mongo") &&
+		!strings.HasPrefix(spec.Image, "qdrant") &&
+		!strings.HasPrefix(spec.Image, "minio") &&
+		!strings.Contains(spec.Image, "kalpana") &&
+		!strings.Contains(spec.Image, "alpine") {
 		return false, fmt.Errorf("untrusted registry origin: %s is not registered in safe registry list", spec.Image)
 	}
 

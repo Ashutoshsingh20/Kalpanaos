@@ -117,6 +117,7 @@ services:
       CERT_FILE: /certs/col/server.crt
       KEY_FILE: /certs/col/server.key
       CA_FILE: /certs/ca.crt
+      KALPANA_NETWORK: kalpanaos_kalpana-net
     ports:
       - "8002:8002"
     mem_limit: 100m
@@ -681,6 +682,7 @@ services:
       KEY_FILE: /certs/sirl/server.key
       CA_FILE: /certs/ca.crt
       NODE_ID: ${NODE_ID:-edge-node-01}
+      DOCKER_NETWORK: kalpanaos_kalpana-net
     ports:
       - "8011:8011"
     mem_limit: 80m
